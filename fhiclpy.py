@@ -3,19 +3,26 @@
 # This is a python-based parser which utilizes the PyParsing module by Paul McGuire.
 # It is a top-down, recursive descent parser.
 # 
-# CURRENT ISSUES: Recursion depth, hname association
+# CURRENT ISSUES: Dictionary is insufficient for this useage--
+#	Feature: incorrect output for test case:
+#		tab:{ a:1 } tab.a:2 a:@local::tab.a
+#	Expected Output: { a:2 tab:{ a:2 }}
+#	Actual Output  : { a:1 tab:{ a:1 }}
 # FIXED: Comments, Prolog Assembly, Includes, Refs
 #================================================================================================
 import sys, string, re
 sys.path.append("/home/putz/fhicl/fhicl/fhicl-py")
+sys.path.append("/home/putz/fhicl/fhicl/fhicl-py/orderedDict.py")
 
 #Make this more specific later
 from pyparsing import *
+from orderedDict import OrderedDict
 
 #Reference storage
 refs = {}
 hnames = {}
-
+orderedKeys = []
+delItems = []
 #Exceptions
 class ILLEGAL_STATEMENT(Exception):
      def __init__(self, stmt):
@@ -69,7 +76,8 @@ def addBraces(tokens):
                refs[tokens[(i-1)]] = tokens[i]
             vals.append(tokens[i])
       i += 1
-   return dict(zip(keys,vals))        
+   orderedKeys = keys
+   return OrderedDict(zip(keys,vals))        
 
 #Function for handling sequences
 def addBrackets(tokens):
@@ -159,7 +167,16 @@ def isComment(s):
         return (s.count("#") > 0 or s.count(r'//') > 0) and not(isInclude(s))
 
 def isHName(s):
-        return s.count(".") > 0
+        return str(s).count(".") > 0
+
+def isEmptyDoc(s):
+        content = s.splitlines(0)
+        if len(content) == 0:
+           return False
+        for line in content:
+           if not(isComment(line)) and line != "":
+              return False
+        return True
 
 #Reads External file and returns the contents
 def handleInclude(s):
@@ -227,15 +244,14 @@ def recAssoc(dic, key, val):
       dic[key] = val
       return dic
 #function for handling Left-Hand side Hnames
-def handleHnameAssoc(dic):
-   delItems = []
-   for k, v in dic.iteritems():
-      if isHName(k):
-         key = k.split(".", 1)
-         dic[key[0]] = recAssoc(dic[key[0]], key[1], v)
-         delItems.append(k)
-   for item in delItems:
-      del dic[item]
+def handleHnameAssoc(dic, k):
+#   for k, v in dic.iteritems():
+   if isHName(k):
+      key = k.split(".", 1)
+      dic[key[0]] = recAssoc(dic[key[0]], key[1], dic[k])
+      delItems.append(k)
+#   for item in delItems:
+#      del dic[item]
    return dic
       
 #Function for handling hnames in references.
@@ -250,79 +266,41 @@ def recRef(dic, key):
         else:
            return dic[key]
 
-def handleRef(dic):
-        # k = keys ; v = vals
-        # iterating through the dictionary
-        for k, v in refs.iteritems():
-           #Grab the name being referenced (i.e. @local::<NAME>)
-           newKey = v
-           newKey = newKey.split("::")
-           newKey = newKey[1]
-           #VERSION 3:
-           # If the newKey is an hierarchical name:
-           if isHName(newKey):
-              # Break off the first "chunk" (top-level name):
-              newKey = newKey.split(".", 1)
-              # Is the top-level name in the PROLOG?
-              if "PROLOG" in dic and newKey[0] in dic["PROLOG"]:
-                 dic[k] = recRef(dic["PROLOG"][newKey[0]], newKey[1])
-              # Otherwise:
-              else:
-                 dic[k] = recRef(dic[newKey[0]], newKey[1])
+def handleRef(dic, key, val):
+	newKey = val.split("::")
+	newKey = newKey[1]
+	# VERSION 4: Line By Line
+	if isHName(newKey):
+           #Break off the first "chunk" (top-level name):
+           newKey = newKey.split(".", 1)
+           #Is the top-level name in the PROLOG?
+           if "PROLOG" in dic and newKey[0] in dic["PROLOG"]:
+	      return recRef(dic["PROLOG"][newKey[0]], newKey[1])
+           #Otherwise:
+           else:
+	      return recRef(dic[newKey[0]], newKey[1])
+        # Otherwise:
+        else:
+           # Is the key in the PROLOG?:
+           if "PROLOG" in dic and newKey[0] in dic["PROLOG"]:
+	      return dic["PROLOG"][newKey]
            # Otherwise:
            else:
-              # Is the key in the PROLOG?:
-              if "PROLOG" in dic and newKey[0] in dic["PROLOG"]:
-                 dic[k] = dic["PROLOG"][newKey]
-              # Otherwise:
-              else:
-                 dic[k] = dic[newKey]
-
-           #VERSION 2:
-           #if "PROLOG" in dic and newKey[0] in dic["PROLOG"]:
-           #   print "newKey: ", newKey
-           #   if isHName(newKey):
-           #      newKey = newKey.split(".", 1)
-           #      dic[k] = recRef(dic["PROLOG"][newKey[0]], newKey[1], v)
-           #   else:
-           #      dic[k] = dic["PROLOG"][newKey]
-           #else:
-           #   if isHName(newKey):
-           #      newKey = newKey.split(".", 1)
-           #      dic[k] = recRef(dic[newKey[0]], newKey[1], v)
-           #   else:
-           #      dic[k] = dic[newKey]
-        
-           #VERSION 1:
-           #hname check
-           #NOTE: may be able to optimize this check
-           #ISSUE: Hnames in PROLOG cause crash!
-           #if newKey.count(".") > 0:
-           #   prime the recursion
-           #   newKey = newKey.split(".", 1)
-           #   start recursive descent
-           #   dic[k] = recRef(dic[newKey[0]], newKey[1], v)
-           #check to see if the referenced key is in the PROLOG
-           #Hnames in PROLOG are not supported here.
-        
-           #Checks to see if the dictionary has a PROLOG or not
-           #elif "PROLOG" in dic:
-           #   If the key exists in the PROLOG
-           #   if newKey in dic["PROLOG"]:
-           #      dic[k] = dic["PROLOG"][newKey]
-           #indented in
-           #else:
-           #   dic[k] = dic[newKey]
+	      return dic[newKey]
         return dic
 
-def isEmptyDoc(s):
-        content = s.splitlines(0)
-        if len(content) == 0:
-           return False
-        for line in content:
-           if not(isComment(line)) and line != "":
-              return False
-        return True
+def postParse(dic):
+   for k,v in dic.iteritems():
+#   for k in dic:
+   
+      if isHName(k):
+         dic = handleHnameAssoc(dic, k)
+      #Found a reference
+      if str(v).count("::") > 0:
+         dic[k] = handleRef(dic, k, v)
+   for item in delItems:
+      del dic[item]
+   return dic
 
 def parse(s):
         doc = Syntax()
@@ -347,10 +325,10 @@ def parse(s):
         docStr = addBraces(docStr)  
         
         #resolve hnames
-        docStr = handleHnameAssoc(docStr)
+        #docStr = handleHnameAssoc(docStr)
         #resolve references
-        docStr = handleRef(docStr)
-
+        #docStr = handleRef(docStr)
+	docStr = postParse(docStr)
         #removing PROLOG after resolving references
         if "PROLOG" in docStr:
            del docStr["PROLOG"]
@@ -359,4 +337,5 @@ def parse(s):
 if __name__ == '__main__':
         contents = sys.stdin.read()
         d= parse(contents)
+        d= dict(d)
         print d
