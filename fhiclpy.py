@@ -26,13 +26,19 @@ errLoc = 0
 parseExceptions = []
 
 #Exceptions
+class INVALID_TOKEN(Exception):
+   def __init__(self, stmt):
+      self.msg = "Invalid token detected, resulting in an empty parameter set: " + stmt
+   def __str__(self):
+      return repr(self.msg)
+
 class INVALID_KEY(Exception):
    def __init__(self, stmt):
       self.msg = stmt
    def __str__(self):
       return repr(self.msg)
 
-class INVALID_INCLUDE_SYNTAX(Exception):
+class INVALID_INCLUDE(Exception):
    def __init__(self, stmt):
       self.msg = stmt
    def __str__(self):
@@ -94,47 +100,6 @@ def convertSci(origString, loc, tokens):
    getcontext().prec = len(tokens[0]) - tokens[0].index(".")
    return getcontext().to_sci_string(Decimal(tokens[0]))
    
-#Function for processing the document
-def convertToDict(tokens):
-   keys = []
-   vals = []
-   orig = tokens
-   i = 0
-   while i < (len(tokens)-1):
-      #Assemble Prolog if found
-      if str(tokens[i]).count("BEGIN_PROLOG") > 0:
-         if keys.count("PROLOG") != 0:
-            index = keys.index("PROLOG")
-            vals[index] = join(vals[index], convertToDict(tokens[i][1:(str(tokens).rfind("END_PROLOG"))]))
-         else:   
-            keys.append("PROLOG")
-            vals.append(convertToDict(tokens[i][1:(str(tokens).rfind("END_PROLOG"))]))
-      #Else assemble doc body
-      else:
-         keys.append(tokens[i])
-         #Found non-atom value
-         if str(tokens[i + 1]) == ":":
-            
-            tokens.pop(i + 1)
-            i += 1
-            if len(tokens) > 1:
-               #Found a table
-               if str(tokens[i]).count(":") > 0 and str(tokens[i]).count("@") == 0:
-                  vals.append(convertToDict(tokens[i]))
-               #Found a sequence    
-               elif str(tokens[i]).count("[") > 0:
-                  vals.append(addBrackets(tokens[i]))
-               #Found an atom
-               else:
-                  vals.append(tokens[i])
-            else:
-               raise INVALID_ASSOCIATION("Invalid Association @ " + str(orig) + "; Valid syntax => name : value")
-         #Found an atom
-         else:
-            vals.append(tokens[i])
-      i += 1
-   return OrderedDict(zip(keys,vals))        
-
 #Function for handling sequences
 def addBrackets(tokens):
    return tokens.asList()
@@ -143,81 +108,141 @@ def checkAssoc(origString, loc, tokens):
    return tokens
 
 #Allows combined grammar to ignore commented lines
-pcomment= Regex(r'\#.*')
-ccomment= Regex(r'//.*')
+comment= oneOf('# //') + ZeroOrMore(Word(r'*')) + LineEnd()
+pcomment= Regex(r'\#.*') + LineEnd()
+ccomment= Regex(r'//.*') + LineEnd()
 
 #Rest of Grammar
 def Syntax():
-        #(Bottom)
-        # --BOOLEAN--
-        true= Word('true')
-        false= Word('false')
-        bool= true | false
+   #(Bottom)
+   # --BOOLEAN--
+   true= Word("True")
+   false= Word("False")
+   bool= true | false
 
-        # --NUMBER--
-        null= Word('nil')
-        infinity= oneOf( 'infinity' '+infinity' '-infinity')
-        integer= Word(nums).setParseAction(convertInt)
-        #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
-        float= Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
-        hex= Regex(r'0x[\da-fA-F]*')
-        sci= Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
-        simple= float | integer
-        complex= Combine("(" + simple - "," + simple + ")").setParseAction(convertComplex)
-        number=  MatchFirst(sci | complex | simple | infinity | hex) 
+   # --NUMBER--
+   null= Word('nil')
+   infinity= oneOf( 'infinity' '+infinity' '-infinity')
+   integer= Word(nums).setParseAction(convertInt)
+   #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
+   float= Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
+   hex= Regex(r'0x[\da-fA-F]*')
+   sci= Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
+   simple= float | integer
+   complex= Combine("(" + simple - "," + simple + ")").setParseAction(convertComplex)
+   number=  NoMatch().setName("number") | MatchFirst(sci | complex | simple | infinity | hex)
         
-        # --STRING--
-        dot= Regex(r'[.]')
-        uquoted= Word(alphas+'_', alphanums+'_')
-        squoted = Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE)
-        dquoted = Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE)
-        string= MatchFirst(dquoted | squoted | uquoted)
-        begin= Literal("BEGIN_PROLOG")
-        end= Literal("END_PROLOG")
-        #name= uquoted & ~(begin | end)
-        name= uquoted
-        #Added "Combine" to recognize hname token
-        hname= Combine(name + OneOrMore(dot - name))   
-        id= MatchFirst(hname | name)
+   # --STRING--
+   uquoted= Word(alphas+'_', alphanums+'_')
+   squoted = Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE)
+   dquoted = Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE)
+   string= MatchFirst(dquoted | squoted | uquoted)
+   name= NoMatch().setName("name") | uquoted
+   dot= Regex(r'[.]') + name
+   bracket= Regex(r'\[[\d]\]')
+   #Added "Combine" to recognize hname token
+   hname= NoMatch().setName("hname") | Combine(name + (bracket|dot) + ZeroOrMore(bracket|dot))
+   id= MatchFirst(hname | name).setName("ID")
 
-        # --MISC--
-        ws= Regex(r'\s*').suppress()
-        colon= ws + Regex(r':') + ws
-        local= Regex(r'@local::')
-        db= Regex(r'@db::')
-        ref= Combine(local - id) | Combine(db - id)
+   # --MISC--
+   ws= Regex(r'\s*').suppress()
+   colon= NoMatch().setName("colon") | (ws + ':' + ws)
+   local= Regex(r'@local::')
+   db= Regex(r'@db::')
+   ref= NoMatch().setName("reference") | (Combine(local - id) | Combine(db - id))
 
-        # --ATOM|VALUE--
-        atom= MatchFirst(ref | number | string | null | bool).setResultsName("atom")
-        #table & seq must be forwarded here so that a definition for value can be created
-        table= Forward()
-        seq= Forward()
-        value= MatchFirst(atom | seq | table)
+   # --ATOM|VALUE--
+   atom= NoMatch().setName("atom") | MatchFirst(ref | number | string | null | bool).setName("atom")
+   #table & seq must be forwarded here so that a definition for value can be created
+   table= Forward()
+   seq= Forward()
+   value= NoMatch().setName("value") | MatchFirst(atom | seq | table).setName("value")
 
-        # --ASSOCIATION-
-        association= (id + colon - value).setResultsName("association")
+   # --ASSOCIATION-
+   association= (id - colon - value)
         
-        # --SEQUENCE--
-        seq_item= value | Regex(r',').suppress()
-        seq_body= nestedExpr('[', ']', seq_item) 
-        #filling in forwarded definition
-        seq << seq_body
+   # --SEQUENCE--
+   seq_item= NoMatch().setName("seq_item") | MatchFirst(value | Regex(r',').suppress())
+   seq_body= nestedExpr('[', ']', seq_item) 
+   #filling in forwarded definition
+   seq << seq_body
 
-        # --TABLE--
-        table_item= association | Regex(r'\s')
-        table_body= nestedExpr('{', '}', table_item)
-        #filling in forwarded definition
-        table<< table_body
+   # --TABLE--
+   table_item= NoMatch().setName("table_item") | MatchFirst(association | Regex(r'\s'))
+   table_body= nestedExpr('{', '}', table_item)
+   #filling in forwarded definition
+   table<< table_body
 
-        # --PROLOG--
-        prolog= Group(begin + Optional(OneOrMore(table_item)) + end)
-        prologs= OneOrMore(prolog)
+   # --DOCUMENT--
+   doc_body= ZeroOrMore(table_item)
+   document= doc_body
+   return document
+   #(Top)
 
-        # --DOCUMENT--
-        doc_body= Optional(OneOrMore(prolog)) - Optional(OneOrMore(table_item))
-        document= doc_body
-        return document
-        #(Top)
+def Prolog():
+   #(Bottom)
+   # --BOOLEAN--
+   true= Word('true')
+   false= Word('false')
+   bool= true | false
+
+   # --NUMBER--
+   null= Word('nil')
+   infinity= oneOf( 'infinity' '+infinity' '-infinity')
+   integer= Word(nums).setParseAction(convertInt)
+   #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
+   float= Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
+   hex= Regex(r'0x[\da-fA-F]*')
+   sci= Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
+   simple= float | integer
+   complex= Combine("(" + simple - "," + simple + ")").setParseAction(convertComplex)
+   number=  MatchFirst(sci | complex | simple | infinity | hex)
+
+   # --STRING--
+   dot= Regex(r'[.]')
+   uquoted= Word(alphas+'_', alphanums+'_')
+   squoted = Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE)
+   dquoted = Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE)
+   string= MatchFirst(dquoted | squoted | uquoted)
+   begin= Literal("BEGIN_PROLOG")
+   end= Literal("END_PROLOG")
+   name= uquoted
+   #Added "Combine" to recognize hname token
+   hname= Combine(name + OneOrMore(dot - name))
+   id= MatchFirst(hname | name)
+
+   # --MISC--
+   ws= Regex(r'\s*').suppress()
+   colon= ws + ':' + ws
+   local= Regex(r'@local::')
+   db= Regex(r'@db::')
+   ref= Combine(local - id) | Combine(db - id)
+
+   # --ATOM|VALUE--
+   atom= MatchFirst(ref | number | string | null | bool).setResultsName("atom")
+   #table & seq must be forwarded here so that a definition for value can be created
+   table= Forward()
+   seq= Forward()
+   value= MatchFirst(atom | seq | table)
+
+   association= (id + colon - value).setResultsName("association")
+
+   # --SEQUENCE--
+   seq_item= value | Regex(r',').suppress()
+   seq_body= nestedExpr('[', ']', seq_item)
+   #filling in forwarded definition
+   seq << seq_body
+
+   # --TABLE--
+   table_item= association | Regex(r'\s')
+   table_body= nestedExpr('{', '}', table_item)
+   #filling in forwarded definition
+   table<< table_body
+
+   # --PROLOG--
+   prolog= begin + Optional(OneOrMore(table_item)) + end
+   prologs= OneOrMore(prolog)
+   return prologs
 
 #Is the passed line of input an include statement?
 def isInclude(s):
@@ -225,11 +250,15 @@ def isInclude(s):
         if exists:
            BoL = s.index("#include") == 0
            if BoL:
-              parens = s.count("\"") == 2
-              if parens:
+              space = False
+              if s.count(" ") > 0:
+                 space = s.index(" ") == 8
+              quotes = s.count("\"") == 2
+              if quotes and space:
                  return True
               else:
-                 return False
+                 raise INVALID_INCLUDE("Syntax error at : " + s)
+                 #return False
            else:
               return False
         else:
@@ -237,14 +266,25 @@ def isInclude(s):
 
 #Is the passed line of input a comment?
 def isComment(s):
-   if (s.count("#") > 0 or s.count(r'//') > 0) and not(isInclude(s)):
-      if s.count("#") > 0:
-         if s.index("#") == 0:
-            return True
-      elif s.count(r'//') > 0:
-         if s.index(r'//') == 0:
-            return True
-   return False     
+   if not(isInclude(s)):
+      if (s.count("#") > 0 or s.count(r'//') > 0):
+         if s.count("#") > 0:
+            if s.index("#") == 0:
+               return True
+            else:
+               return False
+         elif s.count(r'//') > 0:
+            if s.index(r'//') == 0:
+               return True
+            else:
+               return False
+      else:
+         return False
+   else:
+      return False     
+
+def isRef(s):
+   return str(s).count("::") > 0
 
 #Checks to see if the passed string is an hname
 def isHName(s):
@@ -253,62 +293,43 @@ def isHName(s):
 #Checks to see if a document (string) is considered "empty"
 #A document is considered "empty" if it contains only comments or only (a) prolog(s).
 def isEmptyDoc(s):
-        content = s.splitlines(0)
+        content = s.splitlines(1)
+        #if there's nothing in s
         if len(content) == 0:
-           return False
-        for line in content:
-           if (not(isComment(line)) and isInclude(line)) or line != "":
-              return False
+           return True
+        else:
+           for line in content:
+              #broken!
+              if (not(isComment(line)) and line != "" and line != "\n"):
+                 return False
         return True
 
 #Reads External file and returns the contents
 def handleInclude(s):
-        #try:
-           name = s.split('"')
-           name = name[1]
-           try:
-              file = open(name)
-              fileContents = file.read()
-              return fileContents
-           except IOError as e:
-              print("({0})".format(e))
-        #except IndexError as e:
-        #   raise INVALID_INCLUDE_SYNTAX("Incorrect syntax for #include: " + name[0] + ". Valid syntax: #include \"filename.ext\"")
+   name = s.split('"')
+   name = name[1]
+   file = open(name)
+   fileContents = file.read()
+   return fileContents
               
 #Function to handle includes before grammar parsing begins      
 def checkIncludes(s):
-        #insertLater = []
-        content = s.splitlines(0)
+        content = s.splitlines(1)
         pcontent = str("")
         i = 0
         while i < len(content):
-           try:
-              #Checking for illegal statements before PROLOG
-              #Comments are allowed
-              if not(isComment(content[i])) and content.count("BEGIN_PROLOG") > 0:
-                 j = content.index("BEGIN_PROLOG")
-                 if j > i:
-                    raise ILLEGAL_STATEMENT(content[i])
-              #Is the line an include?
-          
-              if isInclude(content[i]):
-                 fileContents = handleInclude(content[i])
-                 if fileContents != None:
-                    if fileContents.count("#include") > 0:
-                       fileContents = handleInclude(fileContents)
-                    pcontent += fileContents
-              #Otherwise just add it to the parsed content
-              else:
-                 pcontent += content[i]
-                 pcontent += "\n"
-           except IOError as e:
-              #print ("({0})".format(e))
-              raise
-           except ILLEGAL_STATEMENT as e:
-              #print ("({0})".format(e))
-              raise
+           #Is the line an include?
+           if isInclude(content[i]):
+              fileContents = handleInclude(content[i])
+              if fileContents != None:
+                 if fileContents.count("#include") > 0:
+                    fileContents = handleInclude(fileContents)
+                 pcontent += fileContents
+           #Otherwise just add it to the parsed content
            else:
-              i += 1
+              #raise INVALID_INCLUDE("Syntax error on line " + str(i))
+              pcontent += content[i]
+           i += 1
         #return the parsed content
         return pcontent
 
@@ -351,7 +372,87 @@ def recRef(dic, key):
         else:
            return dic[key]
 
-def handleRef(dic, key, val):
+def detIndType(s):
+   b = s.find("[")
+   d = s.find(".")
+   if b == -1 and d == -1:
+      return ""
+   elif (b == -1 and d != -1) or (d <= b):
+      return "."
+   elif (d == -1 and b != -1) or (b <= d):
+      return "["
+
+def stripCloseB(s):
+   s = s.split("]", 1)
+   s = s[0].join(s[1])
+   return s
+
+def handleRHname(s, d):
+   indexChar = detIndType(s)
+   if indexChar != "":
+      if indexChar == "[":
+         s = s.stripCloseB(s)
+      s = s.split(indexChar, 1)
+      key = s[0]
+      rest = s[1]
+      if key in d:
+         return handleRHname(rest, d[key])
+      else:
+         raise KeyError(key)
+   elif s in d:
+      return d[s]
+   else:
+      raise KeyError(key)
+
+def handleLHname(s, d, v):
+   indexChar = detIndType(s)
+   if indexChar != "":
+      if indexChar == "[":
+         s = s.stripCloseB(s)
+      s = s.split(indexChar, 1)
+      key = s[0]
+      rest = s[1]
+      return handleRHname(rest, d[key])
+   else:
+      d[s] = v
+      return d
+
+def postParse2(d, p):
+   for k, v in d.iteritems():
+      if type(v) is OrderedDict:
+         d[k] = postParse(dict(v), p)
+      if isRef(v):
+         key = v.split("::")[1]
+         indChar = detIndType(key)
+         if indChar != "":
+            testKey = key.split(indChar, 1)[0]
+            if testKey in d:
+               d[k] = handleRHname(key, d)
+            elif testKey in p:
+               d[k] = handleRHname(key, p)
+            else:
+               raise KeyError("In postParse: " + k)
+         elif key in d:
+            d[k] = d[key]
+         elif key in p:
+            d[k] = p[key]
+      if isHName(k):
+         splitChar = detIndType(k)
+         if splitChar != "":
+            newKey = k.split(splitChar, 1)
+            rest = newKey[1]
+            newKey = newKey[0]
+            if newKey in d:
+               d[newKey] = handleLHname(rest, d[newKey], v)
+            elif newKey in p:
+               #Raise error?
+               p[newKey] = handleLHname(rest, d[newKey], v)
+         del d[k]
+   return d
+            #else:
+            #   raise KeyError(testKey)
+
+def handleRef(dic, pro, key, val):
         newKey = val.split("::")        
         newKey = newKey[1]
         # VERSION 4: Line By Line
@@ -359,34 +460,37 @@ def handleRef(dic, key, val):
            #Break off the first "chunk" (top-level name):
            newKey = newKey.split(".", 1)
            #Is the top-level name in the PROLOG?
-           if "PROLOG" in dic and newKey[0] in dic["PROLOG"]:
-              return recRef(dic["PROLOG"][newKey[0]], newKey[1])
+           if newKey[0] in pro:
+              return recRef(pro[newKey[0]], newKey[1])
            #Otherwise:
            else:
               return recRef(dic[newKey[0]], newKey[1])
         # Otherwise:
         else:
            # Is the key in the PROLOG?:
-           if "PROLOG" in dic and newKey[0] in dic["PROLOG"]:
-              return dic["PROLOG"][newKey]
+           if newKey[0] in pro:
+              return pro[newKey]
            # Otherwise:
            else:
+              #try:
               return dic[newKey]
+              #except KeyError as e:
+              #   print "({0})".format(e)
         return dic
 
-def postParse(dic):
+def postParse(dic, pro):
    for k,v in dic.iteritems():
       #Conversion from OrderedDict back to standard dictionary
       if type(v) is OrderedDict:
-         dic[k] = dict(postParse(v))
+         dic[k] = dict(postParse(v, pro))
       if k == "PROLOG":
-         dic[k] = postParse(dic[k])
+         dic[k] = postParse(dic[k], pro)
       #Found an hname
       if isHName(k):
          dic = handleOverride(dic, k)
       #Found a reference
       if str(v).count("::") > 0:
-         dic[k] = handleRef(dic, k, v)
+         dic[k] = handleRef(dic, pro, k, v)
    # Deleting resolved overrides from dictionary
    for item in delItems:
       del dic[item]
@@ -403,46 +507,127 @@ def orderCheck(s):
       i += 1
    return True
 
+#Function for processing the document
+def convertToDict(tokens):
+   keys = []
+   vals = []
+   orig = tokens
+   i = 0
+   while i < (len(tokens)-1):
+      keys.append(tokens[i])
+      if str(tokens[i + 1]) == ":":
+
+         tokens.pop(i + 1)
+         i += 1
+         if len(tokens) > 1:
+            #Found a table
+            if str(tokens[i]).count(":") > 0 and str(tokens[i]).count("@") == 0:
+               vals.append(convertToDict(tokens[i]))
+            #Found a sequence    
+            elif str(tokens[i]).count("[") > 0:
+               vals.append(addBrackets(tokens[i]))
+            #Found an atom
+            else:
+               vals.append(tokens[i])
+         else:
+            raise INVALID_ASSOCIATION("Invalid Association @ " + str(orig) + "; Valid syntax => name : value")
+      #Found an atom
+      else:
+         vals.append(tokens[i])
+      i += 1
+   return OrderedDict(zip(keys,vals))
+
+def assembleProlog(tokens):
+   keys = []
+   vals = [] 
+   i = 0
+   while i < (len(tokens)-1):
+      keys.append(tokens[i])
+      #Found non-atom value 
+      if str(tokens[i + 1]) == ":":
+         tokens.pop(i + 1)
+         i += 1
+         if len(tokens) > 1:
+            #Found a table
+            if str(tokens[i]).count(":") > 0 and str(tokens[i]).count("@") == 0:
+               vals.append(convertToDict(tokens[i]))
+            #Found a sequence    
+            elif str(tokens[i]).count("[") > 0:
+               vals.append(addBrackets(tokens[i]))
+            #Found an atom
+            else:
+               vals.append(tokens[i])
+         else:
+            raise INVALID_ASSOCIATION("Invalid Association @ " + str(orig) + "; Valid syntax => name : value")
+      #Found an atom
+      else:
+         vals.append(tokens[i])
+      i += 1
+   dict = OrderedDict(zip(keys,vals))
+   del dict["BEGIN_PROLOG"]
+   #del dict["END_PROLOG"]
+   return dict
+
 def parse(s):
         try:
+           prologs = []
            doc = Syntax()
+           pro = Prolog()
+
            #ignoring comments
            doc.ignore(ccomment)
            doc.ignore(pcomment)
+           #doc.ignore(comment)
+           pro.ignore(ccomment)
+           pro.ignore(pcomment)
 
            content = str("")
+           isEmpty = False
            #check for empty doc/only comments
            if isEmptyDoc(s):
               #If the document is empty, or just has comments/empty lines
               #Return an empty dictionary
               return dict()
-	   if orderCheck(s):	
+           elif orderCheck(s):  
               #includes checking
               if s.count("#include") > 0:
                  s = checkIncludes(s)
+              #handle prolog(s)
+              if s.count("BEGIN_PROLOG") > 0:
+                 prologStr = s[:s.rfind("END_PROLOG")+10]
+                 s = s[s.rfind("END_PROLOG")+10:len(s)]
+                 prologs = pro.parseString(prologStr)
+                 prologs = assembleProlog(prologs)
               #parse contents of file
               docStr = doc.parseString(s)
               #convert over to proper dictionary
               docStr = convertToDict(docStr)  
               #resolving references and hnames
-              docStr = postParse(docStr)
-
-           #removing PROLOG (no longer needed)
-           if "PROLOG" in docStr:
-              del docStr["PROLOG"]
-           if "END_PROLOG" in docStr:
-              del docStr["END_PROLOG"]
-           return dict(docStr)
+              docStr = postParse2(docStr, prologs)
+              #docStr = postParse(docStr, prologs)
+              #docStr = docStr
+              if docStr == {} and not(isEmptyDoc(s)):
+                 raise INVALID_TOKEN(str(docStr))
+              else:
+                 return dict(docStr)
+           else:
+              raise ILLEGAL_STATEMENT(str(docStr))
+        except KeyError as e:
+           print ("KEY_ERROR: " + "({0})".format(e))
+        except INVALID_TOKEN as e:
+           print ("INVALID_TOKEN: " + "({0})".format(e))
         except IOError as e:
-           print ("IOError: " + "({0})".format(e))
+           print ("IO_ERROR: " + "({0})".format(e))
         except ILLEGAL_STATEMENT as e:
            print ("ILLEGAL_STATEMENT: " + "({0})".format(e))
-        except INVALID_INCLUDE_SYNTAX as e:
-           print ("INVALID_INCLUDE_SYNTAX: " + "({0})".format(e))
+        except INVALID_INCLUDE as e:
+           print ("INVALID_INCLUDE: " + "({0})".format(e))
         except INVALID_ASSOCIATION as e:
            print ("INVALID_ASSOCIATION: " + "({0})".format(e))
         except ParseBaseException as e:
-           print ("Parse Exception: " + "({0})".format(e))
+           #if e.msg.count("@local::") > 0:
+           #   e.msg = "Expected a value"
+           print ("PARSE_EXCEPTION: " + "({0})".format(e))
 if __name__ == '__main__':
         contents = sys.stdin.read()
         d= parse(contents)
