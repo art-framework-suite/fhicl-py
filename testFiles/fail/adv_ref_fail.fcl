@@ -1,0 +1,6 @@
+BEGIN_PROLOG
+t:{ a:1 b:2 }
+t.a : 5
+END_PROLOG
+t.b: 3
+t.c:@local::t.a
