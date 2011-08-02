@@ -10,7 +10,7 @@
 #       Actual Output  : { a:1 tab:{ a:1 }}
 # FIXED: Comments, Prolog Assembly, Includes, Refs
 #================================================================================================
-import sys, string, re, decimal
+import sys, string, re, decimal, ast
 import os.path
 sys.path.append("/home/putz/fhicl/fhicl/fhicl-py")
 sys.path.append("/home/putz/fhicl/fhicl/fhicl-py/orderedDict.py")
@@ -92,14 +92,22 @@ def convertFloat(origString, loc, tokens):
       return float(Decimal(tokens[0]))
 
 #Function for converting string to complex
-def convertComplex(origString, loc, tokens):
-   return complex(tokens[0])
+def convertComplex(tokens):
+   cmplx = ast.literal_eval(tokens[0])
+   return cmplx
    
 #Function for converting string to scientific notation
 def convertSci(origString, loc, tokens):
    getcontext().prec = len(tokens[0]) - tokens[0].index(".")
-   return getcontext().to_sci_string(Decimal(tokens[0]))
+   number = str(float(Decimal(tokens[0])))
+   number = re.sub(r'([Ee])\+',r'\1',number)
+   if int(Decimal(number)) == float(number): 
+      number = str(int(Decimal(number)))
+   return '%s' % (number,)
    
+def convertHex(origString, loc, tokens):
+   return int(tokens[0], 16)
+
 #Function for handling sequences
 def addBrackets(tokens):
    return tokens.asList()
@@ -121,16 +129,19 @@ def Syntax():
    bool= true | false
 
    # --NUMBER--
+   ws= Regex(r'\s*').suppress()
+   lparen= Literal("(").suppress()
+   rparen= Literal(")").suppress()
    null= Word('nil')
    infinity= oneOf( 'infinity' '+infinity' '-infinity')
    integer= Word(nums).setParseAction(convertInt)
    #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
    float= Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
-   hex= Regex(r'0x[\da-fA-F]*')
+   hex= Regex(r"(0x|$)[0-9a-fA-F]+").setParseAction(convertHex)
    sci= Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
    simple= float | integer
-   complex= Combine("(" + simple - "," + simple + ")").setParseAction(convertComplex)
-   number=  NoMatch().setName("number") | MatchFirst(sci | complex | simple | infinity | hex)
+   complex= Combine(lparen + ws + simple + ws + "," + ws + simple + ws + rparen).setParseAction(convertComplex)
+   number=  NoMatch().setName("number") | MatchFirst(sci | complex | hex | simple | infinity)
         
    # --STRING--
    uquoted= Word(alphas+'_', alphanums+'_')
@@ -145,7 +156,6 @@ def Syntax():
    id= MatchFirst(hname | name).setName("ID")
 
    # --MISC--
-   ws= Regex(r'\s*').suppress()
    colon= NoMatch().setName("colon") | (ws + ':' + ws)
    local= Regex(r'@local::')
    db= Regex(r'@db::')
@@ -195,7 +205,7 @@ def Prolog():
    hex= Regex(r'0x[\da-fA-F]*')
    sci= Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
    simple= float | integer
-   complex= Combine("(" + simple - "," + simple + ")").setParseAction(convertComplex)
+   complex= Combine(Literal("(").suppress() + simple - "," + simple + Literal(")").suppress()).setParseAction(convertComplex)
    number=  MatchFirst(sci | complex | simple | infinity | hex)
 
    # --STRING--
@@ -250,15 +260,11 @@ def isInclude(s):
         if exists:
            BoL = s.index("#include") == 0
            if BoL:
-              space = False
-              if s.count(" ") > 0:
-                 space = s.index(" ") == 8
-              quotes = s.count("\"") == 2
-              if quotes and space:
+	      space = (s.count(" ") >= 1 and s.index(" ") == 8)
+ 	      if space:
                  return True
-              else:
-                 raise INVALID_INCLUDE("Syntax error at : " + s)
-                 #return False
+	      else:
+	 	 raise INVALID_INCLUDE(s + " is not a valid include statement.")
            else:
               return False
         else:
@@ -304,13 +310,26 @@ def isEmptyDoc(s):
                  return False
         return True
 
+def isString(s):
+   if s.count("'") == 2:
+      if s.find("'") == 0 and s.rfind("'") == len(s) - 1:
+         return True
+   elif s.count('"') == 2:
+      if s.find('"') == 0 and s.rfind('"') == len(s) - 1:
+	 return True
+   else:
+      return False
+
 #Reads External file and returns the contents
 def handleInclude(s):
    name = s.split('"')
-   name = name[1]
-   file = open(name)
-   fileContents = file.read()
-   return fileContents
+   try:
+      name = name[1]
+      file = open(name)
+      fileContents = file.read()
+      return fileContents
+   except:
+      raise INVALID_INCLUDE(s + " is not a valid include statement.")
               
 #Function to handle includes before grammar parsing begins      
 def checkIncludes(s):
@@ -367,7 +386,7 @@ def handleRHname(s, d):
    elif s in d:
       return d[s]
    else:
-      raise KeyError(key)
+      raise KeyError(s)
 
 def handleLHname(s, d, v):
    indexChar = detIndType(s)
@@ -385,31 +404,56 @@ def handleLHname(s, d, v):
             d.append(v)
          else:
             d[int(s)] = v
+	 return d
       else:
-         d[s] = v
-      return d
+	 #change to d[s] = v to change behavior
+	 #move "return d" from 2 lines up to outside if/else
+
+	 #problem occurs here!!!
+	 #Fixed - ish
+	 return dict(zip(list(s), list(str(v))))
 
 def postParse(d, p):
+   #Iterate through the dictionary
    for k, v in d.iteritems():
+      #Recursive conversion of OrderedDicts to dicts
       if type(v) is OrderedDict:
          d[k] = postParse(dict(v), p)
+      #Found a reference
       if isRef(v):
          key = v.split("::")[1]
          indChar = detIndType(key)
+         #if it's an HName
+	 #Can probably change this to use "IsHName(s)"
          if indChar != "":
+	    #If it's a brace index, strip off the closing brace
             if indChar == "[":
                key = stripCloseB(key)
+	    #split at the indexing character
             testKey = key.split(indChar, 1)[0]
+            #check to see if the leading name is in the document dictionary
             if testKey in d:
+ 	       #if so, recursively handle the hname
+	       v = handleRHname(key, d)
                d[k] = handleRHname(key, d)
+	    #else check to see if the key is in the prolog dictionary
             elif testKey in p:
+	       #if so, recursively handle the hname
                d[k] = handleRHname(key, p)
+	       v = handleRHname(key, p)
             else:
-               raise KeyError("In postParse: " + k)
+	       #Otherwise, error out
+               raise KeyError("In postParse: " + testKey)
+	 #If it's not an hname
+	 #check to see if the name exists in d
          elif key in d:
             d[k] = d[key]
+	 #else check to see if the name exists in p
          elif key in p:
             d[k] = p[key]
+	 else:
+	    raise KeyError("In postParse: " + key)
+      #If it's an hname
       if isHName(k):
          splitChar = detIndType(k)
          newKey = k
@@ -422,12 +466,13 @@ def postParse(d, p):
             if newKey in d:
                d[newKey] = handleLHname(rest, d[newKey], v)
             elif newKey in p:
-               #Raise error?
-               p[newKey] = handleLHname(rest, d[newKey], v)
+	       #Change 'd' to 'p' to change behavior of test case: adv_ref_pass.fcl
+	       #Making this change will affect the output as such:
+	       #Before change: { a:6 }
+	       #After change: { a:6 tab1:{ a:7 } }
+               d[newKey] = handleLHname(rest, p[newKey], v)
          del d[k]
    return d
-            #else:
-            #   raise KeyError(testKey)
 
 def orderCheck(s):
    content = s.splitlines();
@@ -453,15 +498,18 @@ def convertToDict(tokens):
          tokens.pop(i + 1)
          i += 1
          if len(tokens) > 1:
-            #Found a table
-            if str(tokens[i]).count(":") > 0 and str(tokens[i]).count("@") == 0:
-               vals.append(convertToDict(tokens[i]))
-            #Found a sequence    
-            elif str(tokens[i]).count("[") > 0:
-               vals.append(addBrackets(tokens[i]))
-            #Found an atom
-            else:
-               vals.append(tokens[i])
+	    if not isString(str(tokens[i])):
+               #Found a table
+               if str(tokens[i]).count(":") > 0 and str(tokens[i]).count("@") == 0:
+                  vals.append(convertToDict(tokens[i]))
+               #Found a sequence    
+               elif str(tokens[i]).count("[") > 0:
+                  vals.append(addBrackets(tokens[i]))
+               #Found an atom
+               else:
+                  vals.append(tokens[i])
+	    else:
+  	       vals.append(tokens[i])
          else:
             raise INVALID_ASSOCIATION("Invalid Association @ " + str(orig) + "; Valid syntax => name : value")
       #Found an atom
@@ -497,8 +545,10 @@ def assembleProlog(tokens):
          vals.append(tokens[i])
       i += 1
    dict = OrderedDict(zip(keys,vals))
-   del dict["BEGIN_PROLOG"]
-   #del dict["END_PROLOG"]
+   if "BEGIN_PROLOG" in dict:
+      del dict["BEGIN_PROLOG"]
+   if "END_PROLOG" in dict:
+      del dict["END_PROLOG"]
    return dict
 
 def parse(s):
@@ -531,6 +581,7 @@ def parse(s):
                  s = s[s.rfind("END_PROLOG")+10:len(s)]
                  prologs = pro.parseString(prologStr)
                  prologs = assembleProlog(prologs)
+		 prologs = postParse(prologs, {})
               #parse contents of file
               docStr = doc.parseString(s)
               #convert over to proper dictionary
