@@ -288,7 +288,7 @@ def isRef(s):
 
 #Checks to see if the passed string is an hname
 def isHName(s):
-        return str(s).count(".") > 0
+        return (str(s).count(".") > 0 or str(s).count("[") > 0)
 
 #Checks to see if a document (string) is considered "empty"
 #A document is considered "empty" if it contains only comments or only (a) prolog(s).
@@ -333,58 +333,23 @@ def checkIncludes(s):
         #return the parsed content
         return pcontent
 
-#recursive handling of overrides
-def recOverride(dic, key, val):
-   #Look for a DOT_INDEX token
-   if key.count(".") > 0:
-      #split off the leading name
-      newKey = key.split(".", 1)
-      #descend one level in the dictionary
-      #and continue checking the rest of the hname
-      return recAssoc(dic[newKey[0]], newKey[1])
-   else:
-      if key in dic:
-         dic[key] = val
-         return dic
-      else:
-         raise INVALID_KEY("Key " + key + " does not exist in parameter set.")
-
-#function for handling Left-Hand side Hnames
-def handleOverride(dic, k):
-   if isHName(k):
-      key = k.split(".", 1)
-      if key[0] in dic:
-         dic[key[0]] = recOverride(dic[key[0]], key[1], dic[k])
-         delItems.append(k)
-      else:
-         raise INVALID_KEY("Key " + key[0] + " does not exist in parameter set.")
-   return dic
-      
-#Function for handling hnames in references.
-def recRef(dic, key):
-        #Look for a DOT_INDEX token
-        if key.count(".") > 0:
-           #split off the leading name
-           newKey = key.split(".", 1)
-           #descend one level in the dictionary
-           #and continue checking the rest of the hname
-           return recRef(dic[newKey[0]], newKey[1])
-        else:
-           return dic[key]
-
 def detIndType(s):
    b = s.find("[")
    d = s.find(".")
+   if b == -1 and d > -1:
+      return "."
+   if d == -1 and b > -1:
+      return "["
    if b == -1 and d == -1:
       return ""
-   elif (b == -1 and d != -1) or (d <= b):
+   elif ( d <= b):
       return "."
-   elif (d == -1 and b != -1) or (b <= d):
+   elif ( b <= d):
       return "["
 
 def stripCloseB(s):
    s = s.split("]", 1)
-   s = s[0].join(s[1])
+   s = s[0] + s[1]
    return s
 
 def handleRHname(s, d):
@@ -408,16 +373,23 @@ def handleLHname(s, d, v):
    indexChar = detIndType(s)
    if indexChar != "":
       if indexChar == "[":
-         s = s.stripCloseB(s)
+         s = stripCloseB(s)
       s = s.split(indexChar, 1)
       key = s[0]
       rest = s[1]
       return handleRHname(rest, d[key])
    else:
-      d[s] = v
+      if type(d) is list:
+         index = int(s)
+         if index > (len(d) - 1):
+            d.append(v)
+         else:
+            d[int(s)] = v
+      else:
+         d[s] = v
       return d
 
-def postParse2(d, p):
+def postParse(d, p):
    for k, v in d.iteritems():
       if type(v) is OrderedDict:
          d[k] = postParse(dict(v), p)
@@ -425,6 +397,8 @@ def postParse2(d, p):
          key = v.split("::")[1]
          indChar = detIndType(key)
          if indChar != "":
+            if indChar == "[":
+               key = stripCloseB(key)
             testKey = key.split(indChar, 1)[0]
             if testKey in d:
                d[k] = handleRHname(key, d)
@@ -438,8 +412,11 @@ def postParse2(d, p):
             d[k] = p[key]
       if isHName(k):
          splitChar = detIndType(k)
+         newKey = k
          if splitChar != "":
-            newKey = k.split(splitChar, 1)
+            if splitChar == "[":
+               newKey = stripCloseB(k)
+            newKey = newKey.split(splitChar, 1)
             rest = newKey[1]
             newKey = newKey[0]
             if newKey in d:
@@ -451,50 +428,6 @@ def postParse2(d, p):
    return d
             #else:
             #   raise KeyError(testKey)
-
-def handleRef(dic, pro, key, val):
-        newKey = val.split("::")        
-        newKey = newKey[1]
-        # VERSION 4: Line By Line
-        if isHName(newKey):
-           #Break off the first "chunk" (top-level name):
-           newKey = newKey.split(".", 1)
-           #Is the top-level name in the PROLOG?
-           if newKey[0] in pro:
-              return recRef(pro[newKey[0]], newKey[1])
-           #Otherwise:
-           else:
-              return recRef(dic[newKey[0]], newKey[1])
-        # Otherwise:
-        else:
-           # Is the key in the PROLOG?:
-           if newKey[0] in pro:
-              return pro[newKey]
-           # Otherwise:
-           else:
-              #try:
-              return dic[newKey]
-              #except KeyError as e:
-              #   print "({0})".format(e)
-        return dic
-
-def postParse(dic, pro):
-   for k,v in dic.iteritems():
-      #Conversion from OrderedDict back to standard dictionary
-      if type(v) is OrderedDict:
-         dic[k] = dict(postParse(v, pro))
-      if k == "PROLOG":
-         dic[k] = postParse(dic[k], pro)
-      #Found an hname
-      if isHName(k):
-         dic = handleOverride(dic, k)
-      #Found a reference
-      if str(v).count("::") > 0:
-         dic[k] = handleRef(dic, pro, k, v)
-   # Deleting resolved overrides from dictionary
-   for item in delItems:
-      del dic[item]
-   return dic
 
 def orderCheck(s):
    content = s.splitlines();
@@ -603,8 +536,7 @@ def parse(s):
               #convert over to proper dictionary
               docStr = convertToDict(docStr)  
               #resolving references and hnames
-              docStr = postParse2(docStr, prologs)
-              #docStr = postParse(docStr, prologs)
+              docStr = postParse(docStr, prologs)
               #docStr = docStr
               if docStr == {} and not(isEmptyDoc(s)):
                  raise INVALID_TOKEN(str(docStr))
