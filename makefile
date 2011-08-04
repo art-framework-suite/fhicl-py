@@ -24,6 +24,8 @@ test_pass: fhiclpy.py
 	python fhiclpy.py < testFiles/pass/adv_ref3_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_ref4_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_ref5_pass.fcl
+	python fhiclpy.py < testFiles/pass/adv_test_pass.fcl
+
 test_fail: fhiclpy.py
 	python fhiclpy.py < testFiles/fail/assoc_fail.fcl
 	python fhiclpy.py < testFiles/fail/assoc2_fail.fcl
