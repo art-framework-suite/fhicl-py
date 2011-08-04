@@ -122,7 +122,6 @@ delItems = []
 # Leading "NoMatch()" elements indicate what to do if the 
 # parser can't match a token once it has committed to a type
 
-
 #Comments:
 #Allows combined grammar to ignore commented lines
 comment= oneOf('# //') + ZeroOrMore(Word(r'*')) + LineEnd()
@@ -130,7 +129,6 @@ pcomment= Regex(r'\#.*') + LineEnd()
 ccomment= Regex(r'//.*') + LineEnd()
 
 #Parameter Set Grammar:
-#Separate from prolog grammar so that prolog may be processed independently.
 def Syntax():
 
    #(Bottom)
@@ -199,76 +197,6 @@ def Syntax():
    document= doc_body
    return document
    #(Top)
-
-#Prolog grammar. Contains grammar definitions for start and end tags
-def Prolog():
-   #(Bottom)
-   # --BOOLEAN--
-   true= Word('true')
-   false= Word('false')
-   bool= true | false
-
-   # --NUMBER--
-   ws= Regex(r'\s*').suppress()
-   lparen= Literal("(").suppress()
-   rparen= Literal(")").suppress()
-   null= Word('nil')
-   infinity= oneOf( 'infinity' '+infinity' '-infinity')
-   integer= Word(nums).setParseAction(convertInt)
-   #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
-   float= Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
-   hex= Regex(r"(0x|$)[0-9a-fA-F]+").setParseAction(convertHex)
-   sci= Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
-   simple= float | integer
-   complex= Combine(lparen + ws + simple + ws + "," + ws + simple + ws + rparen).setParseAction(convertComplex)
-   number=  NoMatch().setName("number") | MatchFirst(sci | complex | hex | simple | infinity)
-
-   # --STRING--
-   uquoted= Word(alphas+'_', alphanums+'_')
-   squoted = Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE)
-   dquoted = Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE)
-   string= MatchFirst(dquoted | squoted | uquoted)
-   name= NoMatch().setName("name") | uquoted
-   dot= Regex(r'[.]') + name
-   bracket= Regex(r'\[[\d]\]')
-   #Added "Combine" to recognize hname token
-   hname= NoMatch().setName("hname") | Combine(name + (bracket|dot) + ZeroOrMore(bracket|dot))
-   id= MatchFirst(hname | name).setName("ID")
-
-   # --MISC--
-   colon= NoMatch().setName("colon") | (ws + ':' + ws)
-   local= Regex(r'@local::')
-   db= Regex(r'@db::')
-   ref= NoMatch().setName("reference") | (Combine(local - id) | Combine(db - id))
-
-   # --ATOM|VALUE--
-   atom= NoMatch().setName("atom") | MatchFirst(ref | number | string | null | bool).setName("atom")
-   #table & seq must be forwarded here so that a definition for value can be created
-   table= Forward()
-   seq= Forward()
-   value= NoMatch().setName("value") | MatchFirst(atom | seq | table).setName("value")
-
-   # --ASSOCIATION-
-   association= (id + colon - value)
-
-   # --SEQUENCE--
-   seq_item= NoMatch().setName("seq_item") | MatchFirst(value | Regex(r',').suppress())
-   seq_body= nestedExpr('[', ']', seq_item)
-   #filling in forwarded definition
-   seq << seq_body
-
-   # --TABLE--
-   table_item= NoMatch().setName("table_item") | MatchFirst(association | Regex(r'\s'))
-   table_body= nestedExpr('{', '}', table_item)
-   #filling in forwarded definition
-   table<< table_body
-
-   # --PROLOG--
-   begin= Literal("BEGIN_PROLOG").suppress()
-   end= Literal("END_PROLOG").suppress()
-   prolog= begin + Optional(OneOrMore(table_item)) + end
-   prologs= OneOrMore(prolog)
-   return prologs
 
 #========================================================
 #                      END GRAMMAR
@@ -609,19 +537,27 @@ def buildPSet(toks):
          vals.append(toks.pop(0))
    return OrderedDict(zip(keys, vals))    
 
+#Assembles a prolog string by stripping out START and END tokens.
+def assemblePrologStr(s):
+   prologStr = s.split("BEGIN_PROLOG")
+   newStr = ""
+   for item in prologStr:
+      newStr += item.strip() + "\n"
+   newStr = newStr.split("END_PROLOG")
+   newStr2 = ""
+   for item in newStr:
+      newStr2 += item.strip() + "\n"
+   return newStr2
+
 #Takes a string, waves its wand, and out comes a complete parameter set.
 def parse(s):
         try:
            prologs = []
            doc = Syntax()
-           pro = Prolog()
 
            #ignoring comments
            doc.ignore(ccomment)
            doc.ignore(pcomment)
-           #doc.ignore(comment)
-           pro.ignore(ccomment)
-           pro.ignore(pcomment)
 
            content = str("")
            isEmpty = False
@@ -636,9 +572,10 @@ def parse(s):
                  s = checkIncludes(s)
               #handle prolog(s)
               if s.count("BEGIN_PROLOG") > 0:
-                 prologStr = s[:s.rfind("END_PROLOG")+10]
+                 prologStr = s[s.find("BEGIN_PROLOG")+12:s.rfind("END_PROLOG")-1]
                  s = s[s.rfind("END_PROLOG")+10:len(s)]
-                 prologs = pro.parseString(prologStr)
+                 prologStr = assemblePrologStr(prologStr)
+                 prologs = doc.parseString(prologStr)
                  prologs = buildPSet(prologs)
                  prologs = postParse(prologs, {})
               #parse contents of file
