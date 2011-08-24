@@ -8,15 +8,19 @@
 #    of the same name. This change is in accordance with git commit #69b72b863987c8b52ca781f1823c2c447b887ccf
 #    of fhicl-cpp wherein a similar modification was made.
 # 
-# CURRENT ISSUES: de-generalize pyparsing import
+# CURRENT ISSUES: Some ambiguous error messages; No errors thrown for incorrect unquoted string
+#                 and leading zero cases.
 #================================================================================================
 import sys, string, re, decimal, ast
 import os.path
+import pyparsing as pp
+
 sys.path.append("/home/putz/fhicl/fhicl/fhicl-py")
 sys.path.append("/home/putz/fhicl/fhicl/fhicl-py/orderedDict.py")
 
-#Make this more specific later
-from pyparsing import *
+#Different from Python 7.2's built-in OrderedDict.
+#This class is compatible with Python 4.3 up to 7.x
+#Don't know about Python 3.x
 from orderedDict import OrderedDict
 from decimal import *
 
@@ -41,7 +45,7 @@ class INVALID_INCLUDE(Exception):
    def __str__(self):
       return repr(self.msg)
 
-class PARSE_FAILURE(ParseSyntaxException):
+class PARSE_FAILURE(pp.ParseSyntaxException):
    def __init__(self, stmt):
       self.msg = stmt
    def __str__(self):
@@ -109,6 +113,9 @@ def convertHex(origString, loc, tokens):
 def convertList(tokens):
    return tokens.asList()
 
+def formatStr(origStirng, loc, tokens):
+   return str(tokens[0][1:len(tokens[0]) - 1])
+
 #hname storage:
 #Items in this list are left-hand heirarchical names
 #that are to be removed from the parameter set after
@@ -124,76 +131,78 @@ delItems = []
 
 #Comments:
 #Allows combined grammar to ignore commented lines
-comment= oneOf('# //') + ZeroOrMore(Word(r'*')) + LineEnd()
-pcomment= Regex(r'\#.*') + LineEnd()
-ccomment= Regex(r'//.*') + LineEnd()
+comment= pp.oneOf('# //') + pp.ZeroOrMore(pp.Word(r'*')) + pp.LineEnd()
+pcomment= pp.Regex(r'\#.*') + pp.LineEnd()
+ccomment= pp.Regex(r'//.*') + pp.LineEnd()
 
 #Parameter Set Grammar:
 def Syntax():
 
    #(Bottom)
    # --BOOLEAN--
-   true= Word("True")
-   false= Word("False")
+   true= pp.Word("True")
+   false= pp.Word("False")
    bool= true | false
 
    # --MISC--
-   ws= Regex(r'\s*').suppress()
-   lparen= Literal("(").suppress()
-   rparen= Literal(")").suppress()
-   colon= NoMatch().setName("colon") | (ws + ':' + ws)
-   local= Regex(r'@local::')
-   db= Regex(r'@db::')
+   ws= pp.Regex(r'\s*').suppress()
+   lparen= pp.Literal("(").suppress()
+   rparen= pp.Literal(")").suppress()
+   colon= pp.NoMatch().setName("colon") | (ws + ':' + ws)
+   local= pp.Regex(r'@local::')
+   db= pp.Regex(r'@db::')
 
    # --NUMBER--
-   null= Word('nil')
-   infinity= oneOf( 'infinity' '+infinity' '-infinity')
-   integer= Word(nums).setParseAction(convertInt)
+   null= pp.Word('nil')
+   infinity= pp.oneOf( 'infinity' '+infinity' '-infinity')
+   integer= pp.Word(pp.nums).setParseAction(convertInt)
    #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
-   float= Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
-   hex= Regex(r"(0x|$)[0-9a-fA-F]+").setParseAction(convertHex)
-   sci= Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
+   float= pp.Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
+   hex= pp.Regex(r"(0x|$)[0-9a-fA-F]+").setParseAction(convertHex)
+   sci= pp.Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
    simple= float | integer
-   complex= Combine(lparen + ws + simple + ws + "," + ws + simple + ws + rparen).setParseAction(convertComplex)
-   number=  NoMatch().setName("number") | MatchFirst(sci | complex | hex | simple | infinity)
+   complex= pp.Combine(lparen + ws + simple + ws + "," + ws + simple + ws + rparen).setParseAction(convertComplex)
+   number=  pp.NoMatch().setName("number") | pp.MatchFirst(sci | complex | hex | simple | infinity)
         
    # --STRING--
-   uquoted= Word(alphas+'_', alphanums+'_')
-   squoted = Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE)
-   dquoted = Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE)
-   string= MatchFirst(dquoted | squoted | uquoted)
-   name= NoMatch().setName("name") | uquoted
-   dot= Regex(r'[.]') + name
-   bracket= Regex(r'\[[\d]\]')
+   uquoted= pp.Word(pp.alphas+'_', pp.alphanums+'_')
+   squoted = pp.Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE).setParseAction(formatStr)
+   #squoted = pp.Literal("'").suppress() + pp.Regex(r'(?:\\\'|[^\'])*', re.MULTILINE) + pp.Literal("\"").suppress()
+   dquoted = pp.Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE).setParseAction(formatStr)
+   #dquoted = pp.Literal("\"").suppress() + pp.Regex(r'(?:\\\"|[^"])*', re.MULTILINE) + pp.Literal("\"").suppress()
+   string= pp.MatchFirst(dquoted | squoted | uquoted)
+   name= pp.NoMatch().setName("name") | uquoted
+   dot= pp.Regex(r'[.]') + name
+   bracket= pp.Regex(r'\[[\d]\]')
    #Added "Combine" to recognize hname token
-   hname= NoMatch().setName("hname") | Combine(name + (bracket|dot) + ZeroOrMore(bracket|dot))
-   id= MatchFirst(hname | name).setName("ID")
-   ref= NoMatch().setName("reference") | (Combine(local - id) | Combine(db - id))
+   hname= pp.NoMatch().setName("hname") | pp.Combine(name + (bracket|dot) + pp.ZeroOrMore(bracket|dot))
+   id= pp.MatchFirst(hname | name).setName("ID")
+   ref= pp.NoMatch().setName("reference") | (pp.Combine(local - id) | pp.Combine(db - id))
 
    # --ATOM|VALUE--
-   atom= NoMatch().setName("atom") | MatchFirst(ref | number | string | null | bool).setName("atom")
+   atom= pp.NoMatch().setName("atom") | pp.MatchFirst(ref | number | string | null | bool).setName("atom")
    #table & seq must be forwarded here so that a definition for value can be created
-   table= Forward()
-   seq= Forward()
-   value= NoMatch().setName("value") | MatchFirst(atom | seq | table).setName("value")
+   table= pp.Forward()
+   seq= pp.Forward()
+   value= pp.NoMatch().setName("value") | pp.MatchFirst(atom | seq | table).setName("value")
 
    # --ASSOCIATION-
-   association= (id - colon - value)
+   association= pp.NoMatch().setName("association") | (id - colon - value)
         
    # --SEQUENCE--
-   seq_item= NoMatch().setName("seq_item") | MatchFirst(value | Regex(r',').suppress())
-   seq_body= nestedExpr('[', ']', seq_item) 
+   seq_item= pp.NoMatch().setName("seq_item") | pp.MatchFirst(value | pp.Regex(r',').suppress())
+   seq_body= pp.nestedExpr('[', ']', seq_item) 
    #filling in forwarded definition
    seq << seq_body
 
    # --TABLE--
-   table_item= NoMatch().setName("table_item") | MatchFirst(association | Regex(r'\s'))
-   table_body= nestedExpr('{', '}', table_item)
+   table_item= pp.NoMatch().setName("table_item") | pp.MatchFirst(association | pp.Regex(r'\s'))
+   table_body= pp.nestedExpr('{', '}', table_item)
    #filling in forwarded definition
    table<< table_body
 
    # --DOCUMENT--
-   doc_body= ZeroOrMore(table_item)
+   doc_body= pp.ZeroOrMore(table_item)
    document= doc_body
    return document
    #(Top)
@@ -286,7 +295,8 @@ def handleInclude(s):
    except:
       raise INVALID_INCLUDE(s + " is not a valid include statement.")
               
-#Function to handle includes before grammar parsing begins      
+#Function to handle includes before grammar parsing begins 
+#Doesn't handle past 3 levels of includes...     
 def checkIncludes(s):
         content = s.splitlines(1)
         pcontent = str("")
@@ -294,10 +304,10 @@ def checkIncludes(s):
         while i < len(content):
            #Is the line an include?
            if isInclude(content[i]):
-              fileContents = handleInclude(content[i])
+              fileContents = checkIncludes(handleInclude(content[i]))
               if fileContents != None:
-                 if fileContents.count("#include") > 0:
-                    fileContents = handleInclude(fileContents)
+              #   if fileContents.count("#include") > 0:
+              #      fileContents = handleInclude(fileContents)
                  pcontent += fileContents
            #Otherwise just add it to the parsed content
            else:
@@ -348,11 +358,11 @@ def handleRHname(s, d):
       elif key in d:
          return handleRHname(rest, d[key])
       else:
-         raise KeyError(key + " in handleRHname(inner)")
+         raise KeyError(key + " in " + str(d))
    elif s in d:
       return d[s]
    else:
-      raise KeyError(s + " in handleRHname(outer)")
+      raise KeyError(s + " in " + str(d))
 
 #Function that handles overrides using hnames
 def handleLHname(s, d, v):
@@ -567,7 +577,7 @@ def parse(s):
               #Return an empty dictionary
               return dict()
            elif orderCheck(s):  
-              #includes checking
+              #resolving include statements
               if s.count("#include") > 0:
                  s = checkIncludes(s)
               #handle prolog(s)
@@ -604,7 +614,7 @@ def parse(s):
            print ("INVALID_INCLUDE: " + "({0})".format(e))
         except INVALID_ASSOCIATION as e:
            print ("INVALID_ASSOCIATION: " + "({0})".format(e))
-        except ParseBaseException as e:
+        except pp.ParseBaseException as e:
            print ("PARSE_EXCEPTION: " + "({0})".format(e))
 
 #Default setup
