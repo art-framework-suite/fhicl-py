@@ -19,14 +19,13 @@ test_pass: fhiclpy.py
 	python fhiclpy.py < testFiles/pass/combo_new_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_num_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_string_pass.fcl
-	python fhiclpy.py < testFiles/pass/adv_ref_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_ref2_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_ref3_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_ref4_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_ref5_pass.fcl
 	python fhiclpy.py < testFiles/pass/adv_test_pass.fcl
 	python fhiclpy.py < testFiles/pass/bool_pass.fcl
-
+	python fhiclpy.py < testFiles/pass/leading_zero_pass.fcl
 test_fail: fhiclpy.py
 	python fhiclpy.py < testFiles/fail/assoc_fail.fcl
 	python fhiclpy.py < testFiles/fail/assoc2_fail.fcl
@@ -34,7 +33,6 @@ test_fail: fhiclpy.py
 	python fhiclpy.py < testFiles/fail/include_fail.fcl
 	python fhiclpy.py < testFiles/fail/include2_fail.fcl
 	python fhiclpy.py < testFiles/fail/include3_fail.fcl
-	python fhiclpy.py < testFiles/fail/leading_zero_fail.fcl
 	python fhiclpy.py < testFiles/fail/name_fail.fcl
 	python fhiclpy.py < testFiles/fail/prolog2_fail.fcl
 	python fhiclpy.py < testFiles/fail/prolog_fail.fcl

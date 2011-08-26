@@ -204,7 +204,7 @@ def Syntax():
 
    # --DOCUMENT--
    doc_body= pp.ZeroOrMore(table_item)
-   document= doc_body
+   document= pp.NoMatch().setName("document") | doc_body
    return document
    #(Top)
 
@@ -386,95 +386,76 @@ def handleLHname(s, d, v):
       else:
          #change to d[s] = v to change behavior
          #move "return d" from 2 lines up to outside if/else
-
+         
          #problem occurs here!!!
          #Fixed - ish
          return dict(zip(list(s), list(str(v))))
 
-#This function steps through the assembled parameter set
-#and handles resolution of references and overrides.
-def postParse(d, p):
-   #print "d: ", d
-   #print "p: ", p
-   #Iterate through the dictionary
-   for k, v in d.iteritems():
-      #Recursive conversion of OrderedDicts to dicts
-      if type(v) is OrderedDict:
-         d[k] = postParse(dict(v), p)
-      #Found a reference
-      if isRef(v):
-         key = v.split("::")[1]
-         indChar = detIndType(key)
-         #if it's an HName
-         #Can probably change this to use "IsHName(s)"
-         if indChar != "":
-            #If it's a brace index, strip off the closing brace
-            if indChar == "[":
-               key = stripCloseB(key)
-            #split at the indexing character
-            testKey = key.split(indChar, 1)[0]
-            #check to see if the leading name is in the document dictionary
-            if testKey in d:
-               #if so, recursively handle the hname
-               v = handleRHname(key, d)
-               d[k] = handleRHname(key, d)
-            #else check to see if the key is in the prolog dictionary
-            elif testKey in p:
-               #print "testKey: ", testKey
-               #print "key: ", key
-               #if so, recursively handle the hname
-               d[k] = handleRHname(key, p)
-               v = handleRHname(key, p)
-            else:
-               #Otherwise, error out
-               raise KeyError("In postParse: " + testKey)
-         #If it's not an hname
-         #check to see if the name exists in d
-         elif key in d:
-            d[k] = d[key]
-         #else check to see if the name exists in p
-         elif key in p:
-            d[k] = p[key]
+def resolveRef(d, p, v):
+   #Found a reference
+   if isRef(v):
+      key = v.split("::")[1]
+      indChar = detIndType(key)
+      #if it's an HName
+      #Can probably change this to use "IsHName(s)"
+      if indChar != "":
+         #If it's a brace index, strip off the closing brace
+         if indChar == "[":
+            key = stripCloseB(key)
+         #split at the indexing character
+         testKey = key.split(indChar, 1)[0]
+         #check to see if the leading name is in the document dictionary
+         if testKey in d:
+            #if so, recursively handle the hname
+            v = handleRHname(key, d)
+            #d[k] = handleRHname(key, d)
+         #else check to see if the key is in the prolog dictionary
+         elif testKey in p:
+            #if so, recursively handle the hname
+            #d[k] = handleRHname(key, p)
+            v = handleRHname(key, p)
          else:
-            raise KeyError("In postParse: " + key)
+            #Otherwise, error out
+            raise KeyError("In resolveRef: " + testKey)
+      #If it's not an hname
+      #check to see if the name exists in d
+      elif key in d:
+         v = d[key]
+      #else check to see if the name exists in p
+      elif key in p:
+         v = p[key]
+      else:
+         raise KeyError("In resolveRef: " + key)
+   return v
 
-      #If it's an hname
-      if isHName(k):
-         print "found an hname!: ", k
-         #determine which type of indexing is being used next
-         splitChar = detIndType(k)
-         newKey = k
-         #If there is a type of index being used 
-         if splitChar != "":
-            #If it's bracket indexing, strip of the closing bracket
-            if splitChar == "[":
-               newKey = stripCloseB(k)
-            #Split on the splitChar
-            newKey = newKey.split(splitChar, 1)
-            #Two pieces: chunk before split char => newKey
-            #            chunk after split char => rest
-            rest = newKey[1]
-            newKey = newKey[0]
-            #If the newKey is in the PSet
-            if newKey in d:
-               #Handle hname override
-               d[newKey] = handleLHname(rest, d[newKey], v)
-            #Else if newKey is in the Prolog
-            elif newKey in p:
-               #Handle hname override 
-               
-               #Change 'd' to 'p' to change behavior of test case: adv_ref_pass.fcl
-               #Making this change will affect the output as such:
-               #Before change: { a:6 }
-               #After change: { a:6 tab1:{ a:7 } }
-               d[newKey] = handleLHname(rest, p[newKey], v)
-         #Breaks when there is no prolog
-         if p != {}:
-            #Add an hname key to be deleted from the finished product
-            delItems.append(k)
-   #Clean up resolved overrides
-   for k in delItems: 
-      del d[k]
+def resolveHName(d, p, k, v):
+   #RETURN A KEY
+   #If it's an hname
+   if isHName(k):
+      #determine which type of indexing is being used next
+      newKey = k
+      splitChar = detIndType(k)
+      #If there is a type of index being used 
+      if splitChar != "":
+         #If it's bracket indexing, strip off the closing bracket
+         if splitChar == "[":
+            newKey = stripCloseB(k)
+         #Split on the splitChar
+         newKey = newKey.split(splitChar, 1)
+         #Two pieces: chunk before split char => newKey
+         #            chunk after split char => rest
+         rest = newKey[1]
+         newKey = newKey[0]
+         #If the newKey is in the PSet
+         if newKey in d:
+            #Handle hname override
+            d[newKey] = handleLHname(rest, d[newKey], v)
+            #delItems.append(k)
+         #Else if newKey is in the Prolog
+         elif newKey in p:
+            #Handle hname override 
+            d[newKey] = handleLHname(rest, p[newKey], v)
+         delItems.append(k)
    return d
 
 #Function that checks the input string for illegal statements before prologs
@@ -490,11 +471,11 @@ def orderCheck(s):
    return True
 
 #Construction of a parameter set. Used for both the prolog and document body
-def buildPSet(toks):
+def buildPSet(toks, p={}):
    #We're creating a dictionary, so we'll need keys and values to map to them:
-   keys = []
-   vals = []
-
+   newDict = {}
+   key = ""
+   val = ""
    #Step through the parse tree (toks)
    while len(toks) > 0:
       #Checks to ensure that there are tokens to process and that each line is a valid association
@@ -502,7 +483,8 @@ def buildPSet(toks):
       #Could potentially dump this check all together as anything that doesn't have a ":" in it at this point is invalid
       #NO! Necessary for dual-useage in assembling prolog
       if len(toks) > 1 and str(toks[1]) == (":"):
-         keys.append(toks.pop(0)) #pop the "key" token and append it to the list of keys
+         #keys.append(toks.pop(0)) #pop the "key" token and append it to the list of keys
+         key = toks.pop(0)
          toks.pop(0) #dumping the ":"
          #Still have tokens left?
          if len(toks) > 0:
@@ -510,7 +492,8 @@ def buildPSet(toks):
             if not isString(toks[0]):
                #Reference checking/handling
                if str(toks[0]).count("@") > 0 and str(toks[0]).index("@") == 0:
-                  vals.append(toks.pop(0))
+                  val = toks.pop(0)
+                  #vals.append(toks.pop(0))
                #Sequence/Table checking/handling
                #In the parse tree of tokens, fhicl sequences and tables are both denoted by brackets ("[]")
                #Tables, however, contain associations, so we can make a distinction based on if the body contains (":")
@@ -528,7 +511,8 @@ def buildPSet(toks):
                      secBrack = strg.index("[")
                   #Table
                   if str(toks[0]).count(":") > 0 and (secBrack == -1 or str(toks[0]).index(":") < secBrack):
-                     vals.append(buildPSet(toks.pop(0)))
+                     #vals.append(buildPSet(toks.pop(0)))
+                     val = buildPSet(toks.pop(0), p)
                   else:
                      #Manually assemble list, checking to see if each element is a non-table value or a table body
                      val = []
@@ -537,22 +521,34 @@ def buildPSet(toks):
                            val.append(buildPSet(item))
                         else:
                            val.append(item)
-                     vals.append(val)
+                     #vals.append(val)
                      #done with that token, trash it.
                      toks.pop(0) 
                #Otherwise we have an unquoted string/numeric
                else:
-                  vals.append(toks.pop(0))
+                  val = toks.pop(0)
+                  #vals.append(toks.pop(0))
             #Otherwise it's a quoted string
             else:
-               vals.append(toks.pop(0))
+               val = toks.pop(0)
+               #vals.append(toks.pop(0))
          #Otherwise the association is malformed
          else:
             raise INVALID_ASSOCIATION("Invalid Association @ " + str(toks) + "; Valid syntax => name : value")
       #Otherwise it's a BEGIN/END token
       else:
-         vals.append(toks.pop(0))
-   return OrderedDict(zip(keys, vals))    
+         val = toks.pop(0)
+         #vals.append(toks.pop(0))
+      #newDict = resolveHName(newDict, p, key, val)
+      val = resolveRef(newDict, p, val) 
+      newDict = resolveHName(newDict, p, key, val)
+      #newDict = resolveHName(newDict, p, key, val)
+      newDict[key] = val
+   for item in delItems:
+      del newDict[item]
+      delItems.pop(0)
+   return newDict
+   #return OrderedDict(zip(keys, vals))    
 
 #Assembles a prolog string by stripping out START and END tokens.
 def assemblePrologStr(s):
@@ -594,18 +590,18 @@ def parse(s):
                  prologStr = assemblePrologStr(prologStr)
                  prologs = doc.parseString(prologStr)
                  prologs = buildPSet(prologs)
-                 prologs = postParse(prologs, {})
+                 #prologs = postParse(prologs, {})
               #parse contents of file
               docStr = doc.parseString(s)
               #convert over to proper dictionary
-              docStr = buildPSet(docStr)  
+              docStr = buildPSet(docStr, prologs) 
               #resolving references and hnames
-              docStr = postParse(docStr, prologs)
+              #docStr = postParse(docStr, prologs)
               #Sanity check
-              if docStr == {} and not(isEmptyDoc(s)):
-                 raise INVALID_TOKEN(str(docStr))
-              else:
-                 return dict(docStr)
+              #if docStr == {} and not(isEmptyDoc(s)):
+              #   raise INVALID_TOKEN(str(docStr))
+              #else:
+              return dict(docStr)
            else:
               raise ILLEGAL_STATEMENT(str(docStr))
         #Error handling
