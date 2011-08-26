@@ -107,8 +107,8 @@ def convertSci(origString, loc, tokens):
    
 #Function for converting string to hexadecimal 
 def convertHex(origString, loc, tokens):
-   return int(tokens[0], 16)
-
+   #return int(tokens[0], 16)
+   return tokens[0]
 #Function for converting to a list
 def convertList(tokens):
    return tokens.asList()
@@ -158,7 +158,8 @@ def Syntax():
    integer= pp.Word(pp.nums).setParseAction(convertInt)
    #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
    float= pp.Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
-   hex= pp.Regex(r"(0x|$)[0-9a-fA-F]+").setParseAction(convertHex)
+   hex= pp.Regex(r'(0x|$|0X)[0-9a-fA-F]+').setParseAction(convertHex)
+   bin= pp.Regex(r'(0b)[01]+')
    sci= pp.Regex(r'[0-9\W]*\.[0-9\W]*[eE][0-9]*').setParseAction(convertSci)
    simple= float | integer
    complex= pp.Combine(lparen + ws + simple + ws + "," + ws + simple + ws + rparen).setParseAction(convertComplex)
@@ -393,6 +394,8 @@ def handleLHname(s, d, v):
 #This function steps through the assembled parameter set
 #and handles resolution of references and overrides.
 def postParse(d, p):
+   #print "d: ", d
+   #print "p: ", p
    #Iterate through the dictionary
    for k, v in d.iteritems():
       #Recursive conversion of OrderedDicts to dicts
@@ -417,6 +420,8 @@ def postParse(d, p):
                d[k] = handleRHname(key, d)
             #else check to see if the key is in the prolog dictionary
             elif testKey in p:
+               #print "testKey: ", testKey
+               #print "key: ", key
                #if so, recursively handle the hname
                d[k] = handleRHname(key, p)
                v = handleRHname(key, p)
@@ -432,8 +437,10 @@ def postParse(d, p):
             d[k] = p[key]
          else:
             raise KeyError("In postParse: " + key)
+
       #If it's an hname
       if isHName(k):
+         print "found an hname!: ", k
          #determine which type of indexing is being used next
          splitChar = detIndType(k)
          newKey = k

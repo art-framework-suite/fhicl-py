@@ -1,9 +1,7 @@
 #===========================================
-# Testing Valid Presence of Leading Zero(s)
+# Testing Parsing of Leading Zeros
+# What's Wrong: Leading Zero Shouldn't Parse
 #===========================================
 
-x : 01.23e2
-y : 0013.445e23
-
-z : 05.6
-u : 0123.
+x : 05
+y : 5

@@ -1,8 +1,6 @@
 #===========================================
 # Testing Incorrect Include Statement Syntax
 # What's Wrong: No space between #include and file name
-# -- No Quotes around file name
-# -- Valid!
 #===========================================
 
 #include"filename.ext"
