@@ -124,6 +124,7 @@ def checkStr(origString, loc, tokens):
          raise INVALID_TOKEN("Invalid Token @ " + tokens[0])
    return tokens
 
+#Raises an INVALID_TOKEN exception
 def raiseInvalidToken(origString, loc, tokens):
    raise INVALID_TOKEN("Invalid Token @ " + tokens)
 
@@ -563,44 +564,6 @@ def assemblePrologStr(s):
       newStr2 += item.strip() + "\n"
    return newStr2
 
-def stripComments(s):
-   s = s.splitlines(1)
-   newStr = ""
-   for line in s:
-      if line.count("#") == 0:
-         newStr += line
-   return newStr
-
-def concatList(ls):
-   strg = ""
-   for item in ls:
-      if type(item) == pp.ParseResults:
-         item = concatList(item)
-      strg += str(item)
-   return strg
-
-def checkParse(origStr, parseTree):
-   toks = []
-   i = 0
-   origStr = stripComments(origStr)
-   origStr = origStr.splitlines(0)
-   newStr = ""
-   parseStr = ""
-   for line in origStr:
-      line = line.replace(" ", "")
-      newStr += line 
-   newStr = newStr.replace("{", "")
-   newStr = newStr.replace("}", "")
-   newStr = newStr.replace("[", "")
-   newStr = newStr.replace("]", "")
-   for item in parseTree:
-      if type(item) == pp.ParseResults:
-         item = concatList(item)   
-      #item = item.replace(" ", "")
-      parseStr += str(item)
-   if newStr != parseStr:
-      raise INVALID_TOKEN("Invalid Token @ " + str(origStr))
-    
 #Takes a string, waves its wand, and out comes a complete parameter set.
 def parse(s):
         try:
@@ -631,7 +594,6 @@ def parse(s):
                  prologs = buildPSet(prologs)
               #parse contents of file
               docStr = doc.parseString(s)
-              #checkParse(s, docStr)
               #convert over to proper dictionary
               docStr = buildPSet(docStr, prologs)
               docStr = dict(docStr)
