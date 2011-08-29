@@ -29,7 +29,7 @@ from decimal import *
 #========================================================
 class INVALID_TOKEN(Exception):
    def __init__(self, stmt):
-      self.msg = "Invalid token detected, resulting in an empty parameter set: " + stmt
+      self.msg = "PARSE ERROR: Invalid token detected! " + stmt
    def __str__(self):
       return repr(self.msg)
 
@@ -41,7 +41,7 @@ class INVALID_KEY(Exception):
 
 class INVALID_INCLUDE(Exception):
    def __init__(self, stmt):
-      self.msg = stmt
+      self.msg = "PARSE ERROR: Invalid #include statement detected! " + stmt
    def __str__(self):
       return repr(self.msg)
 
@@ -53,13 +53,13 @@ class PARSE_FAILURE(pp.ParseSyntaxException):
 
 class ILLEGAL_STATEMENT(Exception):
    def __init__(self, stmt, i):
-      self.msg = "Illegal statement found before PROLOG at line " + str(i) + " => " + stmt
+      self.msg = "PARSE ERROR: Illegal statement found before PROLOG at line " + str(i) + " => " + stmt
    def __str__(self):
       return repr(self.msg)
 
 class INVALID_ASSOCIATION(Exception):
    def __init__(self, stmt):
-      self.msg = stmt
+      self.msg = "PARSE ERROR: Invalid syntax for an association! " + stmt
    def __str__(self):
       return repr(self.msg)
 
@@ -113,8 +113,19 @@ def convertHex(origString, loc, tokens):
 def convertList(tokens):
    return tokens.asList()
 
-def formatStr(origStirng, loc, tokens):
-   return str(tokens[0][1:len(tokens[0]) - 1])
+#checks the passed string for malformed, unquoted strings.
+def checkStr(origString, loc, tokens):
+   strg = origString[origString.index(tokens[0]) + len(tokens[0]):len(origString)]
+   strg = strg.replace("\n", "")
+   if strg.count(":") == 0 and strg.count("::") == 0 and strg.count(".") == 0 and strg.count("[") == 0 and strg != "":
+      if tokens[0] in strg or tokens != strg:
+         raise INVALID_TOKEN("Invalid Token @ " + strg)
+   elif str(tokens[0])[0].isdigit():
+         raise INVALID_TOKEN("Invalid Token @ " + tokens[0])
+   return tokens
+
+def raiseInvalidToken(origString, loc, tokens):
+   raise INVALID_TOKEN("Invalid Token @ " + tokens)
 
 #hname storage:
 #Items in this list are left-hand heirarchical names
@@ -156,7 +167,6 @@ def Syntax():
    null= pp.Word('nil')
    infinity= pp.oneOf( 'infinity' '+infinity' '-infinity')
    integer= pp.Word(pp.nums).setParseAction(convertInt)
-   #float= MatchFirst(Word(nums, ".") | Word(nums, ".", nums)).setParseAction(convertFloat)
    float= pp.Regex(r'[\d]*[.][\d*]').setParseAction(convertFloat)
    hex= pp.Regex(r'(0x|$|0X)[0-9a-fA-F]+').setParseAction(convertHex)
    bin= pp.Regex(r'(0b)[01]+')
@@ -166,18 +176,16 @@ def Syntax():
    number=  pp.NoMatch().setName("number") | pp.MatchFirst(sci | complex | hex | simple | infinity)
         
    # --STRING--
-   uquoted= pp.Word(pp.alphas+'_', pp.alphanums+'_')
-   squoted = pp.Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE).setParseAction(formatStr)
-   #squoted = pp.Literal("'").suppress() + pp.Regex(r'(?:\\\'|[^\'])*', re.MULTILINE) + pp.Literal("\"").suppress()
-   dquoted = pp.Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE).setParseAction(formatStr)
-   #dquoted = pp.Literal("\"").suppress() + pp.Regex(r'(?:\\\"|[^"])*', re.MULTILINE) + pp.Literal("\"").suppress()
-   string= pp.MatchFirst(dquoted | squoted | uquoted)
+   uquoted= pp.NoMatch().setName("unquoted string") | pp.Word(pp.alphas+'_', pp.alphanums+'_').setParseAction(checkStr)
+   squoted = pp.Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE)
+   dquoted = pp.Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE)
+   string= pp.NoMatch().setName("string") | pp.MatchFirst(dquoted | squoted | uquoted)
    name= pp.NoMatch().setName("name") | uquoted
    dot= pp.Regex(r'[.]') + name
    bracket= pp.Regex(r'\[[\d]\]')
    #Added "Combine" to recognize hname token
    hname= pp.NoMatch().setName("hname") | pp.Combine(name + (bracket|dot) + pp.ZeroOrMore(bracket|dot))
-   id= pp.MatchFirst(hname | name).setName("ID")
+   id= pp.NoMatch().setName("name or hname") | pp.MatchFirst(hname | name).setName("ID")
    ref= pp.NoMatch().setName("reference") | (pp.Combine(local - id) | pp.Combine(db - id))
 
    # --ATOM|VALUE--
@@ -197,14 +205,14 @@ def Syntax():
    seq << seq_body
 
    # --TABLE--
-   table_item= pp.NoMatch().setName("table_item") | pp.MatchFirst(association | pp.Regex(r'\s'))
+   table_item= pp.NoMatch().setName("association") | pp.MatchFirst(association | pp.Regex(r'\s'))
    table_body= pp.nestedExpr('{', '}', table_item)
    #filling in forwarded definition
    table<< table_body
 
    # --DOCUMENT--
-   doc_body= pp.ZeroOrMore(table_item)
-   document= pp.NoMatch().setName("document") | doc_body
+   doc_body= pp.NoMatch().setName("association") | pp.ZeroOrMore(table_item)
+   document= doc_body
    return document
    #(Top)
 
@@ -493,7 +501,6 @@ def buildPSet(toks, p={}):
                #Reference checking/handling
                if str(toks[0]).count("@") > 0 and str(toks[0]).index("@") == 0:
                   val = toks.pop(0)
-                  #vals.append(toks.pop(0))
                #Sequence/Table checking/handling
                #In the parse tree of tokens, fhicl sequences and tables are both denoted by brackets ("[]")
                #Tables, however, contain associations, so we can make a distinction based on if the body contains (":")
@@ -511,7 +518,6 @@ def buildPSet(toks, p={}):
                      secBrack = strg.index("[")
                   #Table
                   if str(toks[0]).count(":") > 0 and (secBrack == -1 or str(toks[0]).index(":") < secBrack):
-                     #vals.append(buildPSet(toks.pop(0)))
                      val = buildPSet(toks.pop(0), p)
                   else:
                      #Manually assemble list, checking to see if each element is a non-table value or a table body
@@ -521,34 +527,29 @@ def buildPSet(toks, p={}):
                            val.append(buildPSet(item))
                         else:
                            val.append(item)
-                     #vals.append(val)
                      #done with that token, trash it.
                      toks.pop(0) 
                #Otherwise we have an unquoted string/numeric
                else:
                   val = toks.pop(0)
-                  #vals.append(toks.pop(0))
             #Otherwise it's a quoted string
             else:
                val = toks.pop(0)
-               #vals.append(toks.pop(0))
+               #Strip off the single or double quotes
+               val = val[1:len(val)-1]
          #Otherwise the association is malformed
          else:
             raise INVALID_ASSOCIATION("Invalid Association @ " + str(toks) + "; Valid syntax => name : value")
       #Otherwise it's a BEGIN/END token
       else:
          val = toks.pop(0)
-         #vals.append(toks.pop(0))
-      #newDict = resolveHName(newDict, p, key, val)
       val = resolveRef(newDict, p, val) 
       newDict = resolveHName(newDict, p, key, val)
-      #newDict = resolveHName(newDict, p, key, val)
       newDict[key] = val
    for item in delItems:
       del newDict[item]
       delItems.pop(0)
    return newDict
-   #return OrderedDict(zip(keys, vals))    
 
 #Assembles a prolog string by stripping out START and END tokens.
 def assemblePrologStr(s):
@@ -562,6 +563,44 @@ def assemblePrologStr(s):
       newStr2 += item.strip() + "\n"
    return newStr2
 
+def stripComments(s):
+   s = s.splitlines(1)
+   newStr = ""
+   for line in s:
+      if line.count("#") == 0:
+         newStr += line
+   return newStr
+
+def concatList(ls):
+   strg = ""
+   for item in ls:
+      if type(item) == pp.ParseResults:
+         item = concatList(item)
+      strg += str(item)
+   return strg
+
+def checkParse(origStr, parseTree):
+   toks = []
+   i = 0
+   origStr = stripComments(origStr)
+   origStr = origStr.splitlines(0)
+   newStr = ""
+   parseStr = ""
+   for line in origStr:
+      line = line.replace(" ", "")
+      newStr += line 
+   newStr = newStr.replace("{", "")
+   newStr = newStr.replace("}", "")
+   newStr = newStr.replace("[", "")
+   newStr = newStr.replace("]", "")
+   for item in parseTree:
+      if type(item) == pp.ParseResults:
+         item = concatList(item)   
+      #item = item.replace(" ", "")
+      parseStr += str(item)
+   if newStr != parseStr:
+      raise INVALID_TOKEN("Invalid Token @ " + str(origStr))
+    
 #Takes a string, waves its wand, and out comes a complete parameter set.
 def parse(s):
         try:
@@ -590,18 +629,17 @@ def parse(s):
                  prologStr = assemblePrologStr(prologStr)
                  prologs = doc.parseString(prologStr)
                  prologs = buildPSet(prologs)
-                 #prologs = postParse(prologs, {})
               #parse contents of file
               docStr = doc.parseString(s)
+              #checkParse(s, docStr)
               #convert over to proper dictionary
-              docStr = buildPSet(docStr, prologs) 
-              #resolving references and hnames
-              #docStr = postParse(docStr, prologs)
-              #Sanity check
-              #if docStr == {} and not(isEmptyDoc(s)):
-              #   raise INVALID_TOKEN(str(docStr))
-              #else:
-              return dict(docStr)
+              docStr = buildPSet(docStr, prologs)
+              docStr = dict(docStr)
+              #Covers the case of a malformed name in a single association, which makes up the entire document.
+              if (docStr != {}): 
+                 return dict(docStr)
+              else:
+                 raise INVALID_TOKEN("MALFORMED EXPRESSION(S)")
            else:
               raise ILLEGAL_STATEMENT(str(docStr))
         #Error handling
