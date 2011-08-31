@@ -1,16 +1,18 @@
-#==========FHICLPY===============================================================================
+#==========FHICLPY=============================================================
 # AUTHOR: Ryan Putz
-# This is a python-based parser which utilizes the PyParsing module by Paul McGuire.
+# This is a python-based parser which utilizes 
+# the PyParsing module by Paul McGuire.
 # It is a top-down, recursive descent parser.
 #
 # IMPLEMENTATION DIFFERENCES:
-#    This version of fhicl-py allows for the overriding of prolog entries by non-prolog entries
-#    of the same name. This change is in accordance with git commit #69b72b863987c8b52ca781f1823c2c447b887ccf
+#    This version of fhicl-py allows for the overriding of 
+#    prolog entries by non-prolog entries
+#    of the same name. This change is in accordance with 
+#    git commit #69b72b863987c8b52ca781f1823c2c447b887ccf
 #    of fhicl-cpp wherein a similar modification was made.
 # 
-# CURRENT ISSUES: Some ambiguous error messages; No errors thrown for incorrect unquoted string
-#                 and leading zero cases.
-#================================================================================================
+# CURRENT ISSUES: Some ambiguous error messages
+#==============================================================================
 import sys, string, re, decimal, ast
 import os.path
 import pyparsing as pp
@@ -29,7 +31,7 @@ from decimal import *
 #========================================================
 class INVALID_TOKEN(Exception):
    def __init__(self, stmt):
-      self.msg = "PARSE ERROR: Invalid token detected! " + stmt
+      self.msg = "Invalid token detected! " + stmt
    def __str__(self):
       return repr(self.msg)
 
@@ -41,7 +43,7 @@ class INVALID_KEY(Exception):
 
 class INVALID_INCLUDE(Exception):
    def __init__(self, stmt):
-      self.msg = "PARSE ERROR: Invalid #include statement detected! " + stmt
+      self.msg = "Invalid #include statement detected! " + stmt
    def __str__(self):
       return repr(self.msg)
 
@@ -53,13 +55,14 @@ class PARSE_FAILURE(pp.ParseSyntaxException):
 
 class ILLEGAL_STATEMENT(Exception):
    def __init__(self, stmt, i):
-      self.msg = "PARSE ERROR: Illegal statement found before PROLOG at line " + str(i) + " => " + stmt
+      self.msg = ("Illegal statement found before PROLOG at line " 
+         + str(i) + " => " + stmt)
    def __str__(self):
       return repr(self.msg)
 
 class INVALID_ASSOCIATION(Exception):
    def __init__(self, stmt):
-      self.msg = "PARSE ERROR: Invalid syntax for an association! " + stmt
+      self.msg = "Invalid syntax for an association! " + stmt
    def __str__(self):
       return repr(self.msg)
 
@@ -133,8 +136,6 @@ def raiseInvalidToken(origString, loc, tokens):
 #that are to be removed from the parameter set after
 #being resolved
 delItems = []
-
-
 #========================================================
 #                       GRAMMAR
 #========================================================
@@ -177,10 +178,11 @@ def Syntax():
    number=  pp.NoMatch().setName("number") | pp.MatchFirst(sci | complex | hex | simple | infinity)
         
    # --STRING--
-   uquoted= pp.NoMatch().setName("unquoted string") | pp.Word(pp.alphas+'_', pp.alphanums+'_').setParseAction(checkStr)
+   uquoted= pp.NoMatch().setName("unquoted string") | pp.Word(pp.alphanums+'_').setParseAction(checkStr)
    squoted = pp.Regex(r'\'(?:\\\'|[^\'])*\'', re.MULTILINE)
    dquoted = pp.Regex(r'\"(?:\\\"|[^"])*\"', re.MULTILINE)
    string= pp.NoMatch().setName("string") | pp.MatchFirst(dquoted | squoted | uquoted)
+   #name= pp.NoMatch().setName("name") | pp.Word(pp.alphas+'_', pp.alphanums+'_')
    name= pp.NoMatch().setName("name") | uquoted
    dot= pp.Regex(r'[.]') + name
    bracket= pp.Regex(r'\[[\d]\]')
@@ -341,7 +343,6 @@ def detIndType(s):
    if d == -1 and b > -1:
       return "["
    if b == -1 and d == -1:
-      #raise KeyError(s + " invalid hname indexing")
       return ""
    elif ( d <= b):
       return "."
@@ -368,11 +369,12 @@ def handleRHname(s, d):
       elif key in d:
          return handleRHname(rest, d[key])
       else:
-         raise KeyError(key + " in " + str(d))
+         raise KeyError(key + " not in " + str(d))
    elif s in d:
       return d[s]
    else:
-      raise KeyError(s + " in " + str(d))
+      raise KeyError(s + " not in " + str(d))
+
 
 #Function that handles overrides using hnames
 def handleLHname(s, d, v):
@@ -425,7 +427,7 @@ def resolveRef(d, p, v):
             v = handleRHname(key, p)
          else:
             #Otherwise, error out
-            raise KeyError("In resolveRef: " + testKey)
+            raise KeyError(testKey + " not in " + d)
       #If it's not an hname
       #check to see if the name exists in d
       elif key in d:
@@ -434,7 +436,7 @@ def resolveRef(d, p, v):
       elif key in p:
          v = p[key]
       else:
-         raise KeyError("In resolveRef: " + key)
+         raise KeyError(key + " not in " + d)
    return v
 
 def resolveHName(d, p, k, v):
@@ -479,49 +481,63 @@ def orderCheck(s):
       i += 1
    return True
 
+#Function to validate names (I.E. can only start with an underscore or alpha character
+def checkKey (k):
+   if k[0].isdigit() and (k[0].isalpha() or k[0] == "_"):
+      raise INVALID_TOKEN(k)
+
+#==============================================================================
+#Function buildPSet(toks, p={})
 #Construction of a parameter set. Used for both the prolog and document body
+#PARAMS: list of parse results (I.E. tokens), optional prolog parameter set
 def buildPSet(toks, p={}):
-   #We're creating a dictionary, so we'll need keys and values to map to them:
+   #Empty Dictionary
    newDict = {}
    key = ""
    val = ""
    #Step through the parse tree (toks)
    while len(toks) > 0:
-      #Checks to ensure that there are tokens to process and that each line is a valid association
-      #This check works because all non-association elements have been removed by this point.
-      #Could potentially dump this check all together as anything that doesn't have a ":" in it at this point is invalid
-      #NO! Necessary for dual-useage in assembling prolog
+      #Checks to ensure that there are tokens to process and that each line is 
+      #a valid association
       if len(toks) > 1 and str(toks[1]) == (":"):
-         #keys.append(toks.pop(0)) #pop the "key" token and append it to the list of keys
          key = toks.pop(0)
+         #Is it a valid fhicl name?
+         checkKey(key)
+         
          toks.pop(0) #dumping the ":"
          #Still have tokens left?
          if len(toks) > 0:
             #If it's not a quoted string
             if not isString(toks[0]):
                #Reference checking/handling
-               if str(toks[0]).count("@") > 0 and str(toks[0]).index("@") == 0:
+               if (str(toks[0]).count("@") > 0 
+                  and str(toks[0]).index("@") == 0):
                   val = toks.pop(0)
                #Sequence/Table checking/handling
-               #In the parse tree of tokens, fhicl sequences and tables are both denoted by brackets ("[]")
-               #Tables, however, contain associations, so we can make a distinction based on if the body contains (":")
-               elif str(toks[0]).count("[") > 0 and str(toks[0]).count("[") == str(toks[0]).count("]"):
-                  #In the parse tree of tokens, fhicl sequences and tables are both denoted by brackets ("[]")
-                  #Tables, however, contain associations, so we can make a distinction based on if the body contains (":")
-                  #These 4 lines of code handle the case of "I have a sequence of tables"
+               elif (str(toks[0]).count("[") > 0 
+                  and str(toks[0]).count("[") == str(toks[0]).count("]")):
+                  #In the parse tree of tokens, fhicl sequences and tables are 
+                  #both denoted by brackets ("[]"). Tables, however, contain 
+                  #associations, so we can make a distinction based on if the 
+                  #body contains (":"). These 4 lines of code handle the case of
+                  #"I have a sequence of tables" 
                   #I.E. seq:[ { a:1 b:2 }, { c:3 d:4 } ]
-                  #Wherein the parse tree treats everything as lists of tokens until we assemble them here.
-                  #So we can't just blindly check for (":"), and we have to ensure that we're not calling it a table
+                  #Wherein the parse tree treats everything as lists of tokens 
+                  #until we assemble them here. So we can't just blindly check 
+                  #for (":"), and we have to ensure that we're not calling it a
+                  #table.
                   #if it's really a sequence of tables.
                   secBrack = -1
                   if str(toks[0]).count("[") > 1:
                      strg = str(toks[0]).split("[", 1)[1]
                      secBrack = strg.index("[")
                   #Table
-                  if str(toks[0]).count(":") > 0 and (secBrack == -1 or str(toks[0]).index(":") < secBrack):
+                  if (str(toks[0]).count(":") > 0 
+                     and (secBrack == -1 or str(toks[0]).index(":") < secBrack)):
                      val = buildPSet(toks.pop(0), p)
                   else:
-                     #Manually assemble list, checking to see if each element is a non-table value or a table body
+                     #Manually assemble list, checking to see if each element 
+                     #is a non-table value or a table body
                      val = []
                      for item in toks[0]:
                         if str(item).count(":") > 0:
@@ -540,7 +556,8 @@ def buildPSet(toks, p={}):
                val = val[1:len(val)-1]
          #Otherwise the association is malformed
          else:
-            raise INVALID_ASSOCIATION("Invalid Association @ " + str(toks) + "; Valid syntax => name : value")
+            raise INVALID_ASSOCIATION("Invalid Association @ " + str(toks) 
+               + "; Valid syntax => name : value")
       #Otherwise it's a BEGIN/END token
       else:
          val = toks.pop(0)
@@ -573,7 +590,9 @@ def parse(s):
            #ignoring comments
            doc.ignore(ccomment)
            doc.ignore(pcomment)
-
+           
+           numAssocs = 0
+           numComments = s.count("#") + s.count("//")
            content = str("")
            isEmpty = False
            #check for empty doc/only comments
@@ -594,10 +613,12 @@ def parse(s):
                  prologs = buildPSet(prologs)
               #parse contents of file
               docStr = doc.parseString(s)
+              numAssocs = docStr.asList().count(":") - docStr.asList().count("::")
               #convert over to proper dictionary
               docStr = buildPSet(docStr, prologs)
               docStr = dict(docStr)
-              #Covers the case of a malformed name in a single association, which makes up the entire document.
+              #Covers the case of a malformed name in a single association,
+              #which makes up the entire document.
               if (docStr != {}): 
                  return dict(docStr)
               else:

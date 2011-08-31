@@ -85,4 +85,6 @@ test_fail: fhiclpy.py
 	python fhiclpy.py < testFiles/fail/adv_string_fail.fcl
 	@echo "Test14: "
 	python fhiclpy.py < testFiles/fail/adv_ref_fail.fcl
+	@echo "Test15: "
+	python fhiclpy.py < testFiles/fail/name2_fail.fcl
 	@echo "**************************END OF EXPECTED FAILURES*********************************"
