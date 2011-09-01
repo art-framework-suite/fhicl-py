@@ -11,18 +11,14 @@
 #    git commit #69b72b863987c8b52ca781f1823c2c447b887ccf
 #    of fhicl-cpp wherein a similar modification was made.
 # 
-# CURRENT ISSUES: Some ambiguous error messages
+# CURRENT ISSUES: ?
 #==============================================================================
 import sys, string, re, decimal, ast
 import os.path
 import pyparsing as pp
 
-sys.path.append("/home/putz/fhicl/fhicl/fhicl-py")
-sys.path.append("/home/putz/fhicl/fhicl/fhicl-py/orderedDict.py")
-
 #Different from Python 7.2's built-in OrderedDict.
 #This class is compatible with Python 4.3 up to 7.x
-#Don't know about Python 3.x
 from orderedDict import OrderedDict
 from decimal import *
 
@@ -70,22 +66,30 @@ class INVALID_ASSOCIATION(Exception):
 #           PARSE BEHAVIOR FUNCTIONS/METHODS
 #========================================================
 
+#==============================================================================
 #joining two dictionaries (recursive)
+#==============================================================================
 def join(A, B):
     if not isinstance(A, dict) or not isinstance(B, dict):
         return A or B
     return dict([(a, join(A.get(a), B.get(a))) for a in set(A.keys()) | set(B.keys())])
 
+#==============================================================================
 #Function for converting string to int
+#==============================================================================
 def convertInt(origString, loc, tokens):
    return int(tokens[0])
 
+#==============================================================================
 #Function for converting string to long
+#==============================================================================
 def convertLong(origString, loc, tokens):
    getcontext().prec = len(tokens[0]) - tokens[0].index(".")
    return long(tokens[0])
 
+#==============================================================================
 #Function for converting string to float
+#==============================================================================
 def convertFloat(origString, loc, tokens):
    getcontext().prec = len(tokens[0]) - tokens[0].index(".")
    #if representable as an int, do it
@@ -94,12 +98,16 @@ def convertFloat(origString, loc, tokens):
    else:
       return float(Decimal(tokens[0]))
 
+#==============================================================================
 #Function for converting string to complex
+#==============================================================================
 def convertComplex(tokens):
    cmplx = ast.literal_eval(tokens[0])
    return cmplx
    
+#==============================================================================
 #Function for converting string to scientific notation
+#==============================================================================
 def convertSci(origString, loc, tokens):
    getcontext().prec = len(tokens[0]) - tokens[0].index(".")
    number = str(float(Decimal(tokens[0])))
@@ -108,15 +116,22 @@ def convertSci(origString, loc, tokens):
       number = str(int(Decimal(number)))
    return '%s' % (number,)
    
+#==============================================================================
 #Function for converting string to hexadecimal 
+#==============================================================================
 def convertHex(origString, loc, tokens):
    #return int(tokens[0], 16)
    return tokens[0]
+
+#==============================================================================
 #Function for converting to a list
+#==============================================================================
 def convertList(tokens):
    return tokens.asList()
 
+#==============================================================================
 #checks the passed string for malformed, unquoted strings.
+#==============================================================================
 def checkStr(origString, loc, tokens):
    strg = origString[origString.index(tokens[0]) + len(tokens[0]):len(origString)]
    strg = strg.replace("\n", "")
@@ -127,7 +142,9 @@ def checkStr(origString, loc, tokens):
          raise INVALID_TOKEN("Invalid Token @ " + tokens[0])
    return tokens
 
+#==============================================================================
 #Raises an INVALID_TOKEN exception
+#==============================================================================
 def raiseInvalidToken(origString, loc, tokens):
    raise INVALID_TOKEN("Invalid Token @ " + tokens)
 
@@ -227,7 +244,12 @@ def Syntax():
 #                      FUNCTIONS/METHODS
 #========================================================
 
+#==============================================================================
+#isInclude(s)
 #Is the passed string an include statement?
+#Checks for presence of "#include" as well as location on a line
+#PARAMS: a string to be checked
+#==============================================================================
 def isInclude(s):
         exists = s.count("#include") > 0
         if exists:
@@ -243,7 +265,12 @@ def isInclude(s):
         else:
            return False
 
+#==============================================================================
+#isComment(s)
 #Is the passed string a comment?
+#Checks for both "#" and "//" notations as well as location on a line
+#PARAMS: a string to be checked
+#==============================================================================
 def isComment(s):
    if not(isInclude(s)):
       if (s.count("#") > 0 or s.count(r'//') > 0):
@@ -262,16 +289,28 @@ def isComment(s):
    else:
       return False     
 
+#==============================================================================
+#isRef(s)
 #Is the passed string a reference?
+#PARAMS: a string to check
+#==============================================================================
 def isRef(s):
    return str(s).count("::") > 0 and str(s).count("@") > 0
 
+#==============================================================================
+#isHName(s)
 #Is the passed string an hname?
+#PARAMS: a string to check
+#==============================================================================
 def isHName(s):
         return (str(s).count(".") > 0 or (str(s).count("[") > 0 and str(s).count("[") == str(s).count("]")))
 
+#==============================================================================
+#isEmptyDoc(s)
 #Checks to see if a document (string) is considered "empty"
 #A document is considered "empty" if it contains only comments or only (a) prolog(s).
+#PARAMS: a string (possibly empty) to check.
+#==============================================================================
 def isEmptyDoc(s):
         content = s.splitlines(1)
         #if there's nothing in s
@@ -284,7 +323,11 @@ def isEmptyDoc(s):
                  return False
         return True
 
+#==============================================================================
+#isString(s)
 #Function which looks for matching pairs of single or double quotes
+#PARAMS: a character sequence to be checked.
+#==============================================================================
 def isString(s):
    s = str(s)
    if s.count("'") == 2:
@@ -296,7 +339,11 @@ def isString(s):
    else:
       return False
 
+#==============================================================================
+#handleInclude(s)
 #Reads External file and returns the contents
+#PARAMS: the #include statement to process.
+#==============================================================================
 def handleInclude(s):
    name = s.split('"')
    try:
@@ -307,8 +354,11 @@ def handleInclude(s):
    except:
       raise INVALID_INCLUDE(s + " is not a valid include statement.")
               
-#Function to handle includes before grammar parsing begins 
-#Doesn't handle past 3 levels of includes...     
+#==============================================================================
+#checkIncludes(s)
+#Function to handle includes before grammar parsing begins.
+#PARAMS: A string containing #include statements to be validated and processed
+#==============================================================================
 def checkIncludes(s):
         content = s.splitlines(1)
         pcontent = str("")
@@ -318,22 +368,21 @@ def checkIncludes(s):
            if isInclude(content[i]):
               fileContents = checkIncludes(handleInclude(content[i]))
               if fileContents != None:
-              #   if fileContents.count("#include") > 0:
-              #      fileContents = handleInclude(fileContents)
                  pcontent += fileContents
            #Otherwise just add it to the parsed content
            else:
-              #Either raise an error if we're picky about include syntax
-              #OR treat it as a comment
-
-              #raise INVALID_INCLUDE("Syntax error on line " + str(i))
               pcontent += content[i]
            i += 1
         #return the parsed content
         return pcontent
+
+#==============================================================================
+#detIndType(s)
 #Function that determines which type of indexing is being used in an hname.
 #The two options are DOT(".") index or BRACKET("[]") index.
 #The decision is made based on existence and location within a string
+#PARAMS: a string containing either a FHiCL name or hname.
+#==============================================================================
 def detIndType(s):
    s = str(s)
    b = s.find("[")
@@ -349,13 +398,21 @@ def detIndType(s):
    elif ( b <= d):
       return "["
 
+#==============================================================================
+#stripCloseB(s)
 #Utility function for stripping off the closing bracket in bracket notation
+#PARAMS: A string containing "]"
+#==============================================================================
 def stripCloseB(s):
    s = str(s).split("]", 1)
    s = s[0] + s[1]
    return s
 
+#==============================================================================
+#handleRHname(s, d)
 #Function that handles look-up of hname references
+#PARAMS: the hname, the dictionary to search in
+#==============================================================================
 def handleRHname(s, d):
    indexChar = detIndType(s)
    if indexChar != "":
@@ -375,8 +432,12 @@ def handleRHname(s, d):
    else:
       raise KeyError(s + " not in " + str(d))
 
-
+#==============================================================================
+#handleLHname(s, d, v)
 #Function that handles overrides using hnames
+#PARAMS: the string containing the "address" of the referenced value,
+#       the dictionary to search in, and the value to replace. 
+#==============================================================================
 def handleLHname(s, d, v):
    indexChar = detIndType(s)
    if indexChar != "":
@@ -395,20 +456,20 @@ def handleLHname(s, d, v):
             d[int(s)] = v
          return d
       else:
-         #change to d[s] = v to change behavior
-         #move "return d" from 2 lines up to outside if/else
-         
-         #problem occurs here!!!
-         #Fixed - ish
          return dict(zip(list(s), list(str(v))))
 
+#==============================================================================
+#resolveRef(d, p, v)
+#This function performs a lookup of the referenced value and returns it.
+#PARAMS: The primary dictionary to search in, the prolog dictionary, 
+#        the hname to lookup (resulting in a value)
+#==============================================================================
 def resolveRef(d, p, v):
    #Found a reference
    if isRef(v):
       key = v.split("::")[1]
       indChar = detIndType(key)
       #if it's an HName
-      #Can probably change this to use "IsHName(s)"
       if indChar != "":
          #If it's a brace index, strip off the closing brace
          if indChar == "[":
@@ -419,11 +480,9 @@ def resolveRef(d, p, v):
          if testKey in d:
             #if so, recursively handle the hname
             v = handleRHname(key, d)
-            #d[k] = handleRHname(key, d)
          #else check to see if the key is in the prolog dictionary
          elif testKey in p:
             #if so, recursively handle the hname
-            #d[k] = handleRHname(key, p)
             v = handleRHname(key, p)
          else:
             #Otherwise, error out
@@ -439,8 +498,14 @@ def resolveRef(d, p, v):
          raise KeyError(key + " not in " + d)
    return v
 
+#==============================================================================
+#resolveHName(d, p, k, v)
+#This function performs the lookup of a FHiCL hname, and makes the appropriate
+#change to the value associated with the referenced key.
+#PARAMS: The primary dictionary to look in, the prolog dictionary,
+#        the full hname (key), and the value to substitute in.
+#==============================================================================
 def resolveHName(d, p, k, v):
-   #RETURN A KEY
    #If it's an hname
    if isHName(k):
       #determine which type of indexing is being used next
@@ -461,7 +526,6 @@ def resolveHName(d, p, k, v):
          if newKey in d:
             #Handle hname override
             d[newKey] = handleLHname(rest, d[newKey], v)
-            #delItems.append(k)
          #Else if newKey is in the Prolog
          elif newKey in p:
             #Handle hname override 
@@ -469,7 +533,11 @@ def resolveHName(d, p, k, v):
          delItems.append(k)
    return d
 
+#==============================================================================
+#orderCheck(s)
 #Function that checks the input string for illegal statements before prologs
+#PARAMS: A string containing the contents of a FHiCL file to be checked.
+#==============================================================================
 def orderCheck(s):
    content = s.splitlines();
    i = 0
@@ -481,15 +549,21 @@ def orderCheck(s):
       i += 1
    return True
 
-#Function to validate names (I.E. can only start with an underscore or alpha character
+#==============================================================================
+#checkKey(k)
+#Function to validate names (I.E. can only start with an underscore or alpha character)
+#NOTE: This function can be modified to include other checks, as well.
+#PARAMS: a key to validate
+#==============================================================================
 def checkKey (k):
    if k[0].isdigit() and (k[0].isalpha() or k[0] == "_"):
       raise INVALID_TOKEN(k)
 
 #==============================================================================
-#Function buildPSet(toks, p={})
+#buildPSet(toks, p={})
 #Construction of a parameter set. Used for both the prolog and document body
 #PARAMS: list of parse results (I.E. tokens), optional prolog parameter set
+#==============================================================================
 def buildPSet(toks, p={}):
    #Empty Dictionary
    newDict = {}
@@ -503,7 +577,6 @@ def buildPSet(toks, p={}):
          key = toks.pop(0)
          #Is it a valid fhicl name?
          checkKey(key)
-         
          toks.pop(0) #dumping the ":"
          #Still have tokens left?
          if len(toks) > 0:
@@ -526,7 +599,7 @@ def buildPSet(toks, p={}):
                   #until we assemble them here. So we can't just blindly check 
                   #for (":"), and we have to ensure that we're not calling it a
                   #table.
-                  #if it's really a sequence of tables.
+                  #if it's really a sequence of tables:
                   secBrack = -1
                   if str(toks[0]).count("[") > 1:
                      strg = str(toks[0]).split("[", 1)[1]
@@ -564,12 +637,17 @@ def buildPSet(toks, p={}):
       val = resolveRef(newDict, p, val) 
       newDict = resolveHName(newDict, p, key, val)
       newDict[key] = val
+   #removing resolved overrides
    for item in delItems:
       del newDict[item]
       delItems.pop(0)
    return newDict
 
+#==============================================================================
+#assemblePrologStr(s)
 #Assembles a prolog string by stripping out START and END tokens.
+#PARAMS: a string containing a FHiCL prolog
+#==============================================================================
 def assemblePrologStr(s):
    prologStr = s.split("BEGIN_PROLOG")
    newStr = ""
@@ -581,7 +659,16 @@ def assemblePrologStr(s):
       newStr2 += item.strip() + "\n"
    return newStr2
 
-#Takes a string, waves its wand, and out comes a complete parameter set.
+#==============================================================================
+#parse(s)
+#Order of Processesing:
+# 1. Checks for an empty document
+# 2. Checks for invalid statements before prolog
+# 3. Validates and imports #include statements
+# 4. Processes and builds prolog parameter set
+# 5. Processes and builds document parameter set
+#PARAMS: a string containing the contents of a FHiCL file
+#==============================================================================
 def parse(s):
         try:
            prologs = []
@@ -591,8 +678,6 @@ def parse(s):
            doc.ignore(ccomment)
            doc.ignore(pcomment)
            
-           numAssocs = 0
-           numComments = s.count("#") + s.count("//")
            content = str("")
            isEmpty = False
            #check for empty doc/only comments
@@ -641,7 +726,9 @@ def parse(s):
         except pp.ParseBaseException as e:
            print ("PARSE_EXCEPTION: " + "({0})".format(e))
 
+#==============================================================================
 #Default setup
+#==============================================================================
 if __name__ == '__main__':
         contents = sys.stdin.read()
         d= parse(contents)
