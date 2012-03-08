@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 #==========FHICLPY=============================================================
 # AUTHOR: Ryan Putz
 # This is a python-based parser which utilizes 
@@ -659,14 +661,17 @@ def assemblePrologStr(s):
    return newStr2
 
 #==============================================================================
-#parse(s)
-#Order of Processesing:
-# 1. Checks for an empty document
-# 2. Checks for invalid statements before prolog
-# 3. Validates and imports #include statements
-# 4. Processes and builds prolog parameter set
-# 5. Processes and builds document parameter set
-#PARAMS: a string containing the contents of a FHiCL file
+# Parse the given string. If the string is legal FHiCL, return a dictionary
+# containing the parsed parameters. If the string is not legal FHiCL, raise an
+# exception.
+#
+# The order of processing is:
+#
+#  1. Checks for an empty document
+#  2. Checks for invalid statements before prolog
+#  3. Validates and imports #include statements
+#  4. Processes and builds prolog parameter set
+#  5. Processes and builds document parameter set
 #==============================================================================
 def parse(s):
         try:
@@ -732,6 +737,4 @@ import sys
 if __name__ == '__main__':
         contents = sys.stdin.read()
         d= parse(contents)
-        if (d.__class__.__name__ != "dict"):
-           sys.exit(1)
         print d
