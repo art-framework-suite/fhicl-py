@@ -17,8 +17,7 @@ import sys, string, re, decimal, ast
 import os.path
 import pyparsing as pp
 
-#Different from Python 7.2's built-in OrderedDict.
-#This class is compatible with Python 4.3 up to 7.x
+
 from orderedDict import OrderedDict
 from decimal import *
 
@@ -729,7 +728,10 @@ def parse(s):
 #==============================================================================
 #Default setup
 #==============================================================================
+import sys
 if __name__ == '__main__':
         contents = sys.stdin.read()
         d= parse(contents)
+        if (d.__class__.__name__ != "dict"):
+           sys.exit(1)
         print d
