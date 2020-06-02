@@ -1,7 +1,0 @@
-#===========================================
-# Testing Parsing of Leading Zeros
-# What's Wrong: Leading Zero Shouldn't Parse
-#===========================================
-
-x : 05
-y : 5

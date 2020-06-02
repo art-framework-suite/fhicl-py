@@ -1,5 +1,0 @@
-#===========================================
-# Testing Incorrect Hierarchical Name Useage
-# What's Wrong: No Name Before "."
-#===========================================
-.a : 5
