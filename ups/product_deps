@@ -9,8 +9,8 @@ product         version		<format=2>
 cetlib          v3_10_00
 fhiclcpp        v4_11_01
 pybind11        v2_5_0a
-python          v3_8_3
-cetbuildtools   v7_17_00        -       only_for_build
+python          v3_8_3a
+cetbuildtools   v7_17_01        -       only_for_build
 end_product_list
 
 table_fragment_begin
