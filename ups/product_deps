@@ -6,8 +6,8 @@ fcldir -
 #
 # define product/version pairs
 product         version		<format=2>
-cetlib          v3_10_00
-fhiclcpp        v4_11_01
+cetlib          v3_11_00
+fhiclcpp        v4_12_00
 pybind11        v2_5_0a
 python          v3_8_3a
 cetbuildtools   v7_17_01        -       only_for_build
