@@ -1,7 +1,0 @@
-#===========================================
-# Testing Incorrect Reference Syntax
-# What's Wrong: Single/No Colon
-#===========================================
-
-x : 5
-y : @local:x
