@@ -74,15 +74,15 @@ namespace {
 
     // Data members.
 
-    std::vector<pybind11::list> lists_{};
+    std::vector<py::list> lists_{};
     // Result stack.
     // dicts_[0] is the entire parameter set (a python dictionary).
     // dicts_.back() is the current parent container that is being filled
     // (a python dictionary or list).
-    std::vector<pybind11::dict> dicts_{pybind11::dict{}};
+    std::vector<py::dict> dicts_{py::dict{}};
   };
 
-  pybind11::dict
+  py::dict
   PythonDictConverter::result() const
   //
   // Purpose: Return result.  When this method is called, the result stack
@@ -364,7 +364,7 @@ namespace {
     return py::str{ss.str()};
   }
 
-  pybind11::dict
+  py::dict
   make_pset(std::string const& filename)
   {
     fhicl::ParameterSet pset;
