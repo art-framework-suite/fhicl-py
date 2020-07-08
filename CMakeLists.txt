@@ -38,6 +38,7 @@ find_ups_product(cetlib v2_01_00)
 find_ups_product(fhiclcpp v4_11_01)
 
 add_subdirectory(python)
+add_subdirectory(ups)
 
 # packaging utility
 include(UseCPack)
