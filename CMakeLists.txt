@@ -1,44 +1,39 @@
-#
-#  fhiclcpp/CMakeLists.txt
-#  -------------------------------------------------------------------
-#
-#  CMake build file for library fhiclcpp and fhiclcppD
-#
-#  cd .../path/to/build/directory
-#  source .../path/to/source/code/setup_for_development
-#  cmake [-DCMAKE_INSTALL_PREFIX=/install/path]
-#        -DCMAKE_BUILD_TYPE=$CETPKG_TYPE
-#        $CETPKG_SOURCE
-#  make
-#  make test
-#  make install
-#  make package (builds distribution tarfile)
+# Required to keep CMake happy.
+cmake_minimum_required(VERSION 3.18.2 FATAL_ERROR)
 
-cmake_minimum_required(VERSION 3.12...3.14 FATAL_ERROR)
-project(fhiclpy LANGUAGES CXX C)
+# Find cetmodules macros and functions.
 
-# cetbuildtools contains our cmake modules
-find_package(cetbuildtools 7.13.01 REQUIRED)
+# Project information, including version and required languages.
+find_package(cetmodules 2.02.01 REQUIRED)
+project(fhiclpy VERSION 4.00.02 LANGUAGES CXX C)
 
+####################################
+# Set any project configuration variables here.
+set(${PROJECT_NAME}_OLD_STYLE_CONFIG_VARS TRUE)
+
+# Initialize the cetmodules build environment.
 include(CetCMakeEnv)
 cet_cmake_env()
 
+# Compiler flag settings.
 cet_set_compiler_flags(DIAGS VIGILANT
   WERROR
   NO_UNDEFINED
-  EXTRA_FLAGS -pedantic
-  EXTRA_CXX_FLAGS -Wnon-virtual-dtor -Wdelete-non-virtual-dtor
-  )
+  EXTRA_FLAGS -pedantic)
 
-cet_report_compiler_flags()
+# Compiler flag settings.
+cet_report_compiler_flags(REPORT_THRESHOLD VERBOSE)
 
-# these are minimum required versions, not the actual product versions
-find_ups_product(cetlib_except v1_00_00)
-find_ups_product(cetlib v2_01_00)
-find_ups_product(fhiclcpp v4_11_01)
+####################################
+# Dependencies.
+
+find_ups_product(cetlib_except) ### MIGRATE-ACTION-RECOMMENDED: use cet_find_package() with target semantics for linking
+find_ups_product(cetlib) ### MIGRATE-ACTION-RECOMMENDED: use cet_find_package() with target semantics for linking
+find_ups_product(fhiclcpp v4_11_01) ### MIGRATE-ACTION-RECOMMENDED: use cet_find_package() with target semantics for linking
 
 add_subdirectory(python)
-add_subdirectory(ups)
 
-# packaging utility
-include(UseCPack)
+####################################
+# Generate CMake (and UPS, if appropriate) configuration files and
+# packaging.
+cet_cmake_config(COMPATIBILITY SameMajorVersion)
