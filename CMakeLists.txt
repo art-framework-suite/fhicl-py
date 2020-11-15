@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.18.2 FATAL_ERROR)
 # Find cetmodules macros and functions.
 
 # Project information, including version and required languages.
-find_package(cetmodules 2.03.00 REQUIRED)
+find_package(cetmodules 2.04.00 REQUIRED)
 project(fhiclpy VERSION 4.00.02 LANGUAGES CXX C)
 
 ####################################
