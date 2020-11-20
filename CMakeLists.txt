@@ -27,9 +27,9 @@ cet_report_compiler_flags(REPORT_THRESHOLD VERBOSE)
 ####################################
 # Dependencies.
 
-find_ups_product(cetlib_except) ### MIGRATE-ACTION-RECOMMENDED: use cet_find_package() with target semantics for linking
-find_ups_product(cetlib) ### MIGRATE-ACTION-RECOMMENDED: use cet_find_package() with target semantics for linking
-find_ups_product(fhiclcpp v4_11_01) ### MIGRATE-ACTION-RECOMMENDED: use cet_find_package() with target semantics for linking
+cet_find_package(cetlib_except REQUIRED)
+cet_find_package(cetlib REQUIRED)
+cet_find_package(fhiclcpp REQUIRED)
 
 add_subdirectory(python)
 
