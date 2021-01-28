@@ -1,10 +1,18 @@
-set(PYTHON_MODULE_EXTENSION ".so")
-find_package(PythonInterp REQUIRED)
-find_package(PythonLibs REQUIRED)
-find_package(pybind11 REQUIRED CONFIG)
-include_directories(${pybind11_INCLUDE_DIRS})
+cet_find_package(PythonInterp PRIVATE REQUIRED)
+cet_find_package(PythonLibs PUBLIC REQUIRED)
+cet_find_package(pybind11 PRIVATE REQUIRED CONFIG)
 
-include_directories(${PYTHON_INCLUDE_DIRS})
-cet_make(LIBRARY_NAME fhicl
-  LIBRARIES cetlib cetlib_except fhiclcpp ${PYTHON_LIBRARIES})
-SET_TARGET_PROPERTIES(fhicl PROPERTIES PREFIX "" SUFFIX ".so")
+cet_make_library(
+  LIBRARY_NAME fhicl
+  SOURCE fhiclmodule.cc
+  LIBRARIES PRIVATE
+    fhiclcpp::fhiclcpp
+    pybind11::module
+    pybind11::embed
+  )
+
+set_target_properties(fhicl
+  PROPERTIES
+    PREFIX ""
+    SUFFIX ".so"
+)
