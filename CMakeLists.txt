@@ -14,13 +14,6 @@ cet_set_compiler_flags(DIAGS VIGILANT
 
 cet_report_compiler_flags(REPORT_THRESHOLD VERBOSE)
 
-####################################
-# Dependencies.
-
-cet_find_package(cetlib_except REQUIRED)
-cet_find_package(cetlib REQUIRED)
-cet_find_package(fhiclcpp REQUIRED)
-
 add_subdirectory(python)
 
 ####################################
