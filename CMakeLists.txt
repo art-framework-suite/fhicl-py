@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18.2 FATAL_ERROR)
 
-find_package(cetmodules 2.04.00 REQUIRED)
-project(fhiclpy VERSION 4.00.03 LANGUAGES CXX C)
+find_package(cetmodules 2.13.00 REQUIRED)
+project(fhiclpy VERSION 4.01.00 LANGUAGES CXX C)
 
 include(CetCMakeEnv)
 cet_cmake_env()
@@ -14,16 +14,9 @@ cet_set_compiler_flags(DIAGS VIGILANT
 
 cet_report_compiler_flags(REPORT_THRESHOLD VERBOSE)
 
-####################################
-# Dependencies.
-
-cet_find_package(cetlib_except REQUIRED)
-cet_find_package(cetlib REQUIRED)
-cet_find_package(fhiclcpp REQUIRED)
-
 add_subdirectory(python)
 
 ####################################
 # Generate CMake (and UPS, if appropriate) configuration files and
 # packaging.
-cet_cmake_config(COMPATIBILITY SameMajorVersion)
+cet_cmake_config()

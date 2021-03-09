@@ -1,5 +1,6 @@
-cet_find_package(PythonInterp PRIVATE REQUIRED)
+cet_find_package(PythonInterp PUBLIC REQUIRED)
 cet_find_package(PythonLibs PUBLIC REQUIRED)
+cet_find_package(fhiclcpp PRIVATE REQUIRED)
 cet_find_package(pybind11 PRIVATE REQUIRED CONFIG)
 
 cet_make_library(
