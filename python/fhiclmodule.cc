@@ -44,7 +44,6 @@
 #include "fhiclcpp/ParameterSet.h"
 #include "fhiclcpp/ParameterSetWalker.h"
 #include "fhiclcpp/detail/printing_helpers.h"
-#include "fhiclcpp/make_ParameterSet.h"
 
 #include <iomanip>
 #include <iostream>
@@ -367,10 +366,9 @@ namespace {
   py::dict
   make_pset(std::string const& filename)
   {
-    fhicl::ParameterSet pset;
     cet::filepath_lookup maker{"FHICL_FILE_PATH"};
 
-    fhicl::make_ParameterSet(filename, maker, pset);
+    auto const pset = fhicl::ParameterSet::make(filename, maker);
     PythonDictConverter converter;
     pset.walk(converter);
     return converter.result();
