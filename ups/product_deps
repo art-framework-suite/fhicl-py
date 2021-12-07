@@ -251,7 +251,7 @@ product		version		qual	flags		<table_format=2>
 fhiclcpp	v4_16_00	-
 python		v3_9_9		-
 cetmodules	v2_29_14	-	only_for_build
-pybind11	v2_6_2		-	only_for_build
+pybind11	v2_8_1		-	only_for_build
 end_product_list
 ####################################
 
