@@ -248,9 +248,9 @@ fcldir	-
 #
 ####################################
 product		version		qual	flags		<table_format=2>
-fhiclcpp	v4_15_03	-
-python		v3_9_2		-
-cetmodules	v2_21_01	-	only_for_build
+fhiclcpp	v4_16_00	-
+python		v3_9_9		-
+cetmodules	v2_29_14	-	only_for_build
 pybind11	v2_6_2		-	only_for_build
 end_product_list
 ####################################
