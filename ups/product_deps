@@ -309,10 +309,12 @@ end_product_list
 qualifier	fhiclcpp	pybind11	python	notes
 c7:debug	c7:debug	-nq-		-nq-
 c7:prof		c7:prof		-nq-		-nq-
-e19:debug	e19:debug	-nq-		-nq-
-e19:prof	e19:prof	-nq-		-nq-
 e20:debug	e20:debug	-nq-		-nq-
 e20:prof	e20:prof	-nq-		-nq-
+e24:debug	e24:debug	-nq-		-nq-
+e24:prof	e24:prof	-nq-		-nq-
+e25:debug	e25:debug	-nq-		-nq-
+e25:prof	e25:prof	-nq-		-nq-
 end_qualifier_list
 ####################################
 
