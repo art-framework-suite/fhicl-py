@@ -250,7 +250,7 @@ fcldir	-
 product		version		qual	flags		<table_format=2>
 fhiclcpp	v4_16_02	-
 python		v3_9_12		-
-cetmodules	v3_15_00	-	only_for_build
+cetmodules	v3_18_00	-	only_for_build
 pybind11	v2_8_1		-	only_for_build
 end_product_list
 ####################################
@@ -309,12 +309,10 @@ end_product_list
 qualifier	fhiclcpp	pybind11	python	notes
 c7:debug	c7:debug	-nq-		-nq-
 c7:prof		c7:prof		-nq-		-nq-
+c14:debug	c14:debug	-nq-		-nq-
+c14:prof	c14:prof	-nq-		-nq-
 e20:debug	e20:debug	-nq-		-nq-
 e20:prof	e20:prof	-nq-		-nq-
-e24:debug	e24:debug	-nq-		-nq-
-e24:prof	e24:prof	-nq-		-nq-
-e25:debug	e25:debug	-nq-		-nq-
-e25:prof	e25:prof	-nq-		-nq-
 e26:debug	e26:debug	-nq-		-nq-
 e26:prof	e26:prof	-nq-		-nq-
 end_qualifier_list
