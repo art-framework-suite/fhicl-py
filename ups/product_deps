@@ -87,7 +87,7 @@
 #>  define_pythonpath
 ####################################
 parent			fhiclpy
-defaultqual		e19
+defaultqual		e20
 define_pythonpath
 ####################################
 
@@ -307,14 +307,16 @@ end_product_list
 #
 ####################################
 qualifier	fhiclcpp	pybind11	python	notes
-c7:debug	c7:debug	-nq-		-nq-
-c7:prof		c7:prof		-nq-		-nq-
 c14:debug	c14:debug	-nq-		-nq-
 c14:prof	c14:prof	-nq-		-nq-
+c15:debug	c15:debug	-nq-		-nq-
+c15:prof	c15:prof	-nq-		-nq-
 e20:debug	e20:debug	-nq-		-nq-
 e20:prof	e20:prof	-nq-		-nq-
 e26:debug	e26:debug	-nq-		-nq-
 e26:prof	e26:prof	-nq-		-nq-
+e27:debug	e27:debug	-nq-		-nq-
+e27:prof	e27:prof	-nq-		-nq-
 end_qualifier_list
 ####################################
 
