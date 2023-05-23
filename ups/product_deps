@@ -248,9 +248,9 @@ fcldir	-
 #
 ####################################
 product		version		qual	flags		<table_format=2>
-fhiclcpp	v4_18_00	-
+fhiclcpp	v4_18_01	-
 python		v3_9_15		-
-cetmodules	v3_21_00	-	only_for_build
+cetmodules	v3_21_02	-	only_for_build
 pybind11	v2_10_3		-	only_for_build
 end_product_list
 ####################################
@@ -317,6 +317,8 @@ e26:debug	e26:debug	-nq-		-nq-
 e26:prof	e26:prof	-nq-		-nq-
 e27:debug	e27:debug	-nq-		-nq-
 e27:prof	e27:prof	-nq-		-nq-
+e28:debug	e28:debug	-nq-		-nq-
+e28:prof	e28:prof	-nq-		-nq-
 end_qualifier_list
 ####################################
 
