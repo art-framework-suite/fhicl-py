@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18.2 FATAL_ERROR)
 
 find_package(cetmodules 2.13.00 REQUIRED)
-project(fhiclpy VERSION 4.03.01 LANGUAGES CXX C)
+project(fhiclpy VERSION 4.03.02 LANGUAGES CXX C)
 
 include(CetCMakeEnv)
 cet_cmake_env()
