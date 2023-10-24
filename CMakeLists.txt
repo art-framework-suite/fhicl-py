@@ -6,7 +6,7 @@ project(fhiclpy VERSION 4.03.02 LANGUAGES CXX C)
 include(CetCMakeEnv)
 cet_cmake_env()
 
-cet_set_compiler_flags(DIAGS VIGILANT
+cet_set_compiler_flags(DIAGS VIGILANT DWARF_VER 4
   WERROR
   NO_UNDEFINED
   EXTRA_FLAGS -pedantic
