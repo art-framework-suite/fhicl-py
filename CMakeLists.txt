@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.18.2 FATAL_ERROR)
 
 find_package(cetmodules 2.13.00 REQUIRED)
-project(fhiclpy VERSION 4.01.04 LANGUAGES CXX C)
+project(fhiclpy VERSION 4.03.03 LANGUAGES CXX C)
 
 include(CetCMakeEnv)
 cet_cmake_env()
 
-cet_set_compiler_flags(DIAGS VIGILANT
+cet_set_compiler_flags(DIAGS VIGILANT DWARF_VER 4
   WERROR
   NO_UNDEFINED
   EXTRA_FLAGS -pedantic

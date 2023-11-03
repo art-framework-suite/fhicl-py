@@ -1,7 +1,6 @@
-find_package(PythonInterp PUBLIC REQUIRED)
-find_package(PythonLibs PUBLIC REQUIRED)
-find_package(fhiclcpp PRIVATE REQUIRED)
-find_package(pybind11 PRIVATE REQUIRED CONFIG)
+find_package(Python3 COMPONENTS Development Interpreter EXPORT REQUIRED)
+find_package(fhiclcpp REQUIRED)
+find_package(pybind11 REQUIRED CONFIG)
 
 cet_make_library(
   LIBRARY_NAME fhicl

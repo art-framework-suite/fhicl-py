@@ -87,7 +87,7 @@
 #>  define_pythonpath
 ####################################
 parent			fhiclpy
-defaultqual		e19
+defaultqual		e20
 define_pythonpath
 ####################################
 
@@ -248,10 +248,10 @@ fcldir	-
 #
 ####################################
 product		version		qual	flags		<table_format=2>
-fhiclcpp	v4_15_03	-
-python		v3_9_2		-
-cetmodules	v2_21_01	-	only_for_build
-pybind11	v2_6_2		-	only_for_build
+fhiclcpp	v4_18_02	-
+python		v3_9_15		-
+cetmodules	v3_22_02	-	only_for_build
+pybind11	v2_10_4		-	only_for_build
 end_product_list
 ####################################
 
@@ -307,12 +307,18 @@ end_product_list
 #
 ####################################
 qualifier	fhiclcpp	pybind11	python	notes
-c7:debug	c7:debug	-nq-		-nq-
-c7:prof		c7:prof		-nq-		-nq-
-e19:debug	e19:debug	-nq-		-nq-
-e19:prof	e19:prof	-nq-		-nq-
+c14:debug	c14:debug	-nq-		-nq-
+c14:prof	c14:prof	-nq-		-nq-
+c15:debug	c15:debug	-nq-		-nq-
+c15:prof	c15:prof	-nq-		-nq-
 e20:debug	e20:debug	-nq-		-nq-
 e20:prof	e20:prof	-nq-		-nq-
+e26:debug	e26:debug	-nq-		-nq-
+e26:prof	e26:prof	-nq-		-nq-
+e27:debug	e27:debug	-nq-		-nq-
+e27:prof	e27:prof	-nq-		-nq-
+e28:debug	e28:debug	-nq-		-nq-
+e28:prof	e28:prof	-nq-		-nq-
 end_qualifier_list
 ####################################
 
