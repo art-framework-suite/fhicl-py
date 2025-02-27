@@ -2,6 +2,8 @@ find_package(Python3 COMPONENTS Development Interpreter EXPORT REQUIRED)
 find_package(fhiclcpp REQUIRED)
 find_package(pybind11 REQUIRED CONFIG)
 
+include(CetMakeLibrary)
+
 cet_make_library(
   LIBRARY_NAME fhicl
   SOURCE fhiclmodule.cc
